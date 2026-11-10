@@ -1,0 +1,204 @@
+{
+  "format": "inv-1",
+  "inventory": "inv-v2",
+  "vin": "1XKYD49X0GJ123456",
+  "created_utc": "2026-10-28T16:40:12.000Z",
+  "previous": "inv-v1",
+  "change": "approved device added: ELD at SA 238 (E04); approved PGN 64892 for E01",
+  "operator": "jdoe",
+  "source_session": 131,
+  "vehicle": {
+    "make": "Kenworth",
+    "model": "T680",
+    "year": 2016,
+    "engine": "Cummins X15",
+    "software_level": "EM-18.4.2"
+  },
+  "entries": [
+    {
+      "entry": "E01",
+      "name": "0x000000002E412A10",
+      "name_fields": {
+        "aac": 0,
+        "industry_group": 0,
+        "vehicle_system": 0,
+        "function": 0,
+        "function_instance": 0,
+        "ecu_instance": 0,
+        "mfr_code": 370,
+        "identity": "0x12A10"
+      },
+      "make": "unknown (mfr code 370; no manufacturer list loaded)",
+      "category": "vehicle ECU in baseline",
+      "addresses": [
+        0
+      ],
+      "states_seen": [
+        "key-on engine off",
+        "engine running",
+        "driving"
+      ],
+      "self_reported": {
+        "component_id": "ENG*CM2350*SN 79512*",
+        "software_id": "01 EM-18.4.2*",
+        "ecu_id": null
+      },
+      "pgns_sent": [
+        61444,
+        65262,
+        65265,
+        65270,
+        65226,
+        65260,
+        65254
+      ],
+      "pgns_approved": [
+        {
+          "pgn": 64892,
+          "kind": "sent",
+          "reason": "DPF regeneration status seen during regen, RO 4471",
+          "utc": "2026-10-28T16:38:05.000Z",
+          "operator": "jdoe"
+        }
+      ],
+      "added": {
+        "how": "training",
+        "inventory": "inv-v1",
+        "utc": "2026-10-21T15:02:44.000Z"
+      },
+      "model": null
+    },
+    {
+      "entry": "E02",
+      "name": "0x000003001D20B4F1",
+      "name_fields": {
+        "aac": 0,
+        "industry_group": 0,
+        "vehicle_system": 0,
+        "function": 3,
+        "function_instance": 0,
+        "ecu_instance": 0,
+        "mfr_code": 233,
+        "identity": "0x0B4F1"
+      },
+      "make": "unknown (mfr code 233; no manufacturer list loaded)",
+      "category": "vehicle ECU in baseline",
+      "addresses": [
+        3
+      ],
+      "states_seen": [
+        "key-on engine off",
+        "engine running",
+        "driving"
+      ],
+      "self_reported": {
+        "component_id": null,
+        "software_id": "01 TC-7.2*",
+        "ecu_id": null
+      },
+      "pgns_sent": [
+        61442,
+        61445,
+        65226
+      ],
+      "pgns_approved": [],
+      "added": {
+        "how": "training",
+        "inventory": "inv-v1",
+        "utc": "2026-10-21T15:02:44.000Z"
+      },
+      "model": null
+    },
+    {
+      "entry": "E03",
+      "name": "0x00000B001A6077C3",
+      "name_fields": {
+        "aac": 0,
+        "industry_group": 0,
+        "vehicle_system": 0,
+        "function": 11,
+        "function_instance": 0,
+        "ecu_instance": 0,
+        "mfr_code": 211,
+        "identity": "0x077C3"
+      },
+      "make": "unknown (mfr code 211; no manufacturer list loaded)",
+      "category": "vehicle ECU in baseline",
+      "addresses": [
+        11
+      ],
+      "states_seen": [
+        "key-on engine off",
+        "engine running",
+        "driving"
+      ],
+      "self_reported": {
+        "component_id": null,
+        "software_id": null,
+        "ecu_id": null
+      },
+      "pgns_sent": [
+        61441,
+        65215,
+        65226
+      ],
+      "pgns_approved": [],
+      "added": {
+        "how": "training",
+        "inventory": "inv-v1",
+        "utc": "2026-10-21T15:02:44.000Z"
+      },
+      "model": null
+    },
+    {
+      "entry": "E04",
+      "name": "0x8000FE003C04D2E8",
+      "name_fields": {
+        "aac": 1,
+        "industry_group": 0,
+        "vehicle_system": 0,
+        "function": 254,
+        "function_instance": 0,
+        "ecu_instance": 0,
+        "mfr_code": 480,
+        "identity": "0x4D2E8"
+      },
+      "make": "unknown (mfr code 480; no manufacturer list loaded)",
+      "category": "external device (approved)",
+      "addresses": [
+        238
+      ],
+      "states_seen": [
+        "key-on engine off",
+        "engine running",
+        "driving"
+      ],
+      "self_reported": {
+        "component_id": "ELDX*TG-5*SN 220871*",
+        "software_id": "01 4.12.0*",
+        "ecu_id": null
+      },
+      "pgns_sent": [
+        59904,
+        60928
+      ],
+      "pgns_approved": [],
+      "added": {
+        "how": "approval",
+        "inventory": "inv-v2",
+        "utc": "2026-10-28T16:40:12.000Z",
+        "from_event": "131-5",
+        "operator": "jdoe"
+      },
+      "requests_trained": [
+        65260,
+        65217,
+        65253,
+        65248,
+        65265,
+        65254
+      ],
+      "model": null
+    }
+  ]
+}

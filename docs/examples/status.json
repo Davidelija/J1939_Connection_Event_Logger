@@ -1,0 +1,28 @@
+{
+  "format": "status-1",
+  "utc": "2026-11-06T15:20:02.870Z",
+  "state": "recording",
+  "light": "steady",
+  "session": 142,
+  "bitrate": 250000,
+  "logger_sa": 247,
+  "unreviewed_high": 0,
+  "fault": null,
+  "card_used_pct": 3.1,
+  "card_nearly_full": false,
+  "clock_valid": true,
+  "clock_source": "rtc",
+  "untrained": false,
+  "retrieved": [
+    "s000139",
+    "s000140",
+    "s000141"
+  ],
+  "retrieved_partial": [
+    "s000142"
+  ],
+  "training_coverage": null,
+  "config": "cfg-v3",
+  "inventory": "inv-v2",
+  "library": "lib-v1"
+}

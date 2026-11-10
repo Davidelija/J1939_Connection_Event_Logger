@@ -1,0 +1,124 @@
+{
+  "format": "cfg-1",
+  "config": "cfg-v3",
+  "created_utc": "2026-10-30T18:12:00.000Z",
+  "operator": "jdoe",
+  "change": "sweep interval 15 -> 10 min",
+  "can": {
+    "interface": "can0",
+    "termination": "off",
+    "bitrates": [
+      250000,
+      500000
+    ],
+    "bitrate_check_frames": 300,
+    "bitrate_fault_s": 60,
+    "rx_buffer_bytes": 1048576
+  },
+  "network": {
+    "address": "192.168.250.1/24"
+  },
+  "address": {
+    "name": "0x9FFEFFFFFFE00001",
+    "claim_from": 247,
+    "claim_down_to": 128,
+    "reserved": [
+      128,
+      142
+    ],
+    "claim_wait_ms": 250,
+    "claim_retries": 1
+  },
+  "requests": {
+    "allow_list": [
+      60928,
+      65254,
+      65260,
+      65259,
+      65242,
+      64965
+    ],
+    "vin_sa": 0,
+    "sweep_interval_min": 10,
+    "timeout_s": 1.25,
+    "retries": 1
+  },
+  "transmit": {
+    "allow_list": [
+      59904,
+      60928,
+      59392,
+      60416
+    ],
+    "max_frames_per_s": 10,
+    "max_outstanding_per_dest": 1
+  },
+  "detection": {
+    "silence_end_s": 60,
+    "requests_kept": 100,
+    "control_pgns": [
+      0,
+      256,
+      1024,
+      65240,
+      56832,
+      65235
+    ],
+    "known_device_new_pgn": true,
+    "move_grace_s": 1,
+    "first_sweep_wait_s": 10
+  },
+  "classify": {
+    "wake_window_s": 10,
+    "trailer_vehicle_system": 2
+  },
+  "identify": {
+    "tie_margin": 0.1
+  },
+  "limits": {
+    "tp_sessions": 32,
+    "pgns_per_conn": 2000,
+    "raw_mb_per_session": 200
+  },
+  "session": {
+    "end_silence_s": 30
+  },
+  "logging": {
+    "session_rollover_h": 24,
+    "sync_interval_s": 2,
+    "hash": "sha256",
+    "raw_before_s": 10,
+    "raw_after_s": 60
+  },
+  "storage": {
+    "event_reserve_mb": 500,
+    "warn_pct": 90
+  },
+  "diag": {
+    "max_bytes": 10485760,
+    "files": 5
+  },
+  "watchdog": {
+    "timeout_s": 30
+  },
+  "restart_guard": {
+    "count": 3,
+    "window_min": 10
+  },
+  "clock": {
+    "max_skew_min": 5
+  },
+  "training": {
+    "timeout_min": 120,
+    "states": [
+      "key-on engine off",
+      "idle",
+      "driving",
+      "PTO"
+    ]
+  },
+  "install": {
+    "connector": "9-pin black",
+    "network": "J1939-1"
+  }
+}

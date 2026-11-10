@@ -1,0 +1,136 @@
+{
+  "format": "lib-1",
+  "library": "lib-v1",
+  "created_utc": "2026-10-20T18:00:00.000Z",
+  "previous": null,
+  "change": "initial library from bench characterization",
+  "operator": "jdoe",
+  "note": "NAME function codes are to be confirmed against the SAE J1939 Digital Annex. Source addresses are only a weak hint.",
+  "devices": [
+    {
+      "type": "ELD",
+      "make": null,
+      "model": null,
+      "functions": [],
+      "sa_hints": [],
+      "requests_typical": [
+        65260,
+        65217,
+        65248,
+        65253,
+        65254,
+        65265
+      ],
+      "sends_typical": [
+        59904,
+        60928
+      ],
+      "requests_never": [
+        65235,
+        65228
+      ],
+      "sends_never": [
+        0,
+        256,
+        1024,
+        65240,
+        56832,
+        55552,
+        54272
+      ],
+      "notes": "Polls VIN, odometer, engine hours, Time/Date and speed on a loop; identified mainly by its request pattern"
+    },
+    {
+      "type": "diagnostic tool, code reader",
+      "make": null,
+      "model": null,
+      "functions": [
+        129
+      ],
+      "sa_hints": [
+        249,
+        250
+      ],
+      "requests_typical": [
+        65226,
+        65227,
+        65235,
+        65259,
+        65260
+      ],
+      "sends_typical": [
+        59904,
+        60928
+      ],
+      "requests_never": [],
+      "sends_never": [
+        55552,
+        54272
+      ],
+      "notes": "DM1 and DM2 reads, component ID, may request DM11 (clear codes)"
+    },
+    {
+      "type": "diagnostic tool, heavy-duty scan tool",
+      "make": "Example Co. (illustrative)",
+      "model": "Demo-1 (illustrative)",
+      "functions": [
+        129
+      ],
+      "sa_hints": [
+        249
+      ],
+      "requests_typical": [
+        65226,
+        65227,
+        65230,
+        65231,
+        65242,
+        65259,
+        64965
+      ],
+      "sends_typical": [
+        59904,
+        60928,
+        60416,
+        60160
+      ],
+      "requests_never": [],
+      "sends_never": [
+        55552,
+        54272
+      ],
+      "notes": "Illustrative entry only, not a real product: shows a populated make and model. A match is reported as a profile match (IDN-4)"
+    },
+    {
+      "type": "diagnostic tool, service or reprogramming",
+      "make": null,
+      "model": null,
+      "functions": [
+        129
+      ],
+      "sa_hints": [
+        249,
+        250
+      ],
+      "requests_typical": [
+        65242,
+        65259,
+        65226,
+        65227
+      ],
+      "sends_typical": [
+        59904,
+        60928,
+        55552,
+        54272
+      ],
+      "requests_never": [],
+      "sends_never": [],
+      "notes": "Sends DM14 memory access and DM18 data security commands; the ECU answers with DM15 and DM16"
+    }
+  ],
+  "manufacturers": {
+    "status": "shipped empty (IDN-2); load a list you are licensed to use",
+    "codes": {}
+  }
+}

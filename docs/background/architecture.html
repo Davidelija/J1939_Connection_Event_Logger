@@ -1,0 +1,388 @@
+<title>J1939 Event Logger Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one wide engineering figure, then a reference table and scope lists in a single reading column */
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #1d2430;
+  --muted: #5b6575;
+  --line: #c9d0db;
+  --zone: #eef1f5;
+  --tx: #c2410c;
+  --ext: #fff4ec;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #1a2029; --ink: #e3e8ef; --muted: #9aa5b5;
+    --line: #3a4352; --zone: #171c24; --tx: #fb923c; --ext: #2a1d14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --ink: #e3e8ef; --muted: #9aa5b5;
+  --line: #3a4352; --zone: #171c24; --tx: #fb923c; --ext: #2a1d14;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans);
+  font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: 28px; font-weight: 600; text-wrap: balance; }
+h2 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+.lede { margin: 0; max-width: 68ch; color: var(--muted); }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 900px; height: auto; color: var(--ink); }
+figcaption { font-size: 14px; color: var(--muted); max-width: 90ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 28px; height: 0; border-top: 2px solid var(--ink); }
+.sw.tx { border-top-color: var(--tx); }
+.sw.dash { width: 18px; height: 12px; border: 1.5px dashed var(--ink); border-radius: 2px; }
+.sw.guard { width: 18px; height: 12px; border: 1.6px solid var(--tx); border-radius: 2px; }
+.sw.ext { width: 18px; height: 12px; border: 1.5px solid var(--tx); background: var(--ext); border-radius: 2px; }
+
+/* SVG styling */
+.zone { fill: var(--zone); stroke: var(--line); stroke-width: 1; }
+.zlabel { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; fill: var(--muted); }
+.box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+.box.train { stroke-dasharray: 5 4; }
+.box.ext { fill: var(--ext); stroke: var(--tx); }
+.box.guard { stroke: var(--tx); stroke-width: 1.6; }
+.t { font-family: var(--sans); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.d { font-family: var(--mono); font-size: 10.5px; fill: var(--muted); }
+.lab { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+.lab.tx { fill: var(--tx); }
+.f { stroke: var(--ink); stroke-width: 1.4; fill: none; }
+.f.tx { stroke: var(--tx); }
+.bus { stroke: var(--ink); stroke-width: 4; }
+.mk { fill: var(--ink); }
+.mk-tx { fill: var(--tx); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--panel); }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; font-family: var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 13px; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.sev { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); }
+code { font-family: var(--mono); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SYSE 549 · J1939 connected-devices event logger</div>
+    <h1>Event logger system architecture</h1>
+    <p class="lede">How the logger taps the diagnostic port, turns CAN frames into connection events, and identifies new devices against a trained list of known-good connections.</p>
+  </header>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1240 800" role="img" aria-label="Architecture of the J1939 event logger: vehicle ECUs and an external device share the J1939 bus; a DG Beacon taps the diagnostic port; frames flow through SocketCAN to a frame decoder, then to a known-good trainer, connection detector, request and DM monitor and device identifier, which write a known-good inventory and a hash-chained event log. The address manager and request scheduler send only through a transmit guard, which enforces the allow-list and rate cap and turns transmission off on any error. An admin and health component handles restart and retrain, the watchdog, the start-up self-check, the diagnostic log and config pushes from the maintenance laptop.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="ar-tx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+
+      <!-- Zones -->
+      <rect class="zone" x="20" y="60" width="255" height="725" rx="6"/>
+      <text class="zlabel" x="34" y="82">VEHICLE</text>
+      <rect class="zone" x="287" y="60" width="168" height="725" rx="6"/>
+      <text class="zlabel" x="299" y="82">DG BEACON HARDWARE</text>
+      <rect class="zone" x="470" y="60" width="500" height="725" rx="6"/>
+      <text class="zlabel" x="484" y="82">EVENT LOGGER SOFTWARE</text>
+      <rect class="zone" x="985" y="60" width="240" height="725" rx="6"/>
+      <text class="zlabel" x="999" y="82">DATA AND OUTPUTS</text>
+
+      <!-- Vehicle -->
+      <text class="lab" x="200" y="104" text-anchor="middle">J1939 CAN bus</text>
+      <line class="bus" x1="200" y1="110" x2="200" y2="400"/>
+      <rect class="box" x="40" y="130" width="120" height="44" rx="4"/>
+      <text class="t" x="100" y="150" text-anchor="middle">Engine ECU</text>
+      <text class="d" x="100" y="166" text-anchor="middle">SA 0</text>
+      <line class="f" x1="160" y1="152" x2="200" y2="152"/>
+      <rect class="box" x="40" y="200" width="120" height="44" rx="4"/>
+      <text class="t" x="100" y="220" text-anchor="middle">Transmission</text>
+      <text class="d" x="100" y="236" text-anchor="middle">SA 3</text>
+      <line class="f" x1="160" y1="222" x2="200" y2="222"/>
+      <rect class="box" x="40" y="270" width="120" height="44" rx="4"/>
+      <text class="t" x="100" y="290" text-anchor="middle">Brakes (ABS)</text>
+      <text class="d" x="100" y="306" text-anchor="middle">SA 11</text>
+      <line class="f" x1="160" y1="292" x2="200" y2="292"/>
+      <rect class="box" x="130" y="400" width="140" height="70" rx="4"/>
+      <text class="t" x="200" y="428" text-anchor="middle">Diagnostic port</text>
+      <text class="d" x="200" y="446" text-anchor="middle">9-pin + short tap</text>
+      <line class="f" x1="200" y1="470" x2="200" y2="540"/>
+      <text class="lab" x="208" y="509">pass-through</text>
+      <rect class="box ext" x="130" y="540" width="140" height="60" rx="4"/>
+      <text class="t" x="200" y="564" text-anchor="middle">External device</text>
+      <text class="d" x="200" y="582" text-anchor="middle">ELD or scan tool</text>
+
+      <!-- Port to CAN channel -->
+      <line class="f" x1="270" y1="425" x2="303" y2="425" marker-end="url(#ar)"/>
+      <line class="f tx" x1="305" y1="447" x2="272" y2="447" marker-end="url(#ar-tx)"/>
+
+      <!-- Beacon hardware -->
+      <rect class="box" x="305" y="110" width="130" height="80" rx="4"/>
+      <text class="t" x="370" y="134" text-anchor="middle">Clock · power</text>
+      <text class="d" x="370" y="152" text-anchor="middle">battery-backed RTC</text>
+      <text class="d" x="370" y="168" text-anchor="middle">wake on CAN</text>
+      <line class="f" x1="370" y1="190" x2="370" y2="248" marker-end="url(#ar)"/>
+      <text class="lab" x="378" y="224">time</text>
+      <rect class="box" x="305" y="250" width="130" height="80" rx="4"/>
+      <text class="t" x="370" y="276" text-anchor="middle">SocketCAN</text>
+      <text class="d" x="370" y="294" text-anchor="middle">raw CAN socket</text>
+      <text class="d" x="370" y="310" text-anchor="middle">kernel timestamps</text>
+      <rect class="box" x="305" y="400" width="130" height="70" rx="4"/>
+      <text class="t" x="370" y="422" text-anchor="middle">CAN channel</text>
+      <text class="d" x="370" y="440" text-anchor="middle">listen-only start</text>
+      <text class="d" x="370" y="456" text-anchor="middle">termination off</text>
+      <line class="f" x1="352" y1="400" x2="352" y2="332" marker-end="url(#ar)"/>
+      <line class="f tx" x1="388" y1="330" x2="388" y2="398" marker-end="url(#ar-tx)"/>
+      <rect class="box" x="305" y="530" width="130" height="70" rx="4"/>
+      <text class="t" x="370" y="552" text-anchor="middle">Status lights</text>
+      <text class="d" x="370" y="570" text-anchor="middle">one light: steady ·</text>
+      <text class="d" x="370" y="586" text-anchor="middle">slow · fast blink</text>
+      <rect class="box" x="305" y="660" width="130" height="90" rx="4"/>
+      <text class="t" x="370" y="682" text-anchor="middle">Storage</text>
+      <text class="d" x="370" y="700" text-anchor="middle">microSD: events,</text>
+      <text class="d" x="370" y="715" text-anchor="middle">raw captures</text>
+      <text class="d" x="370" y="730" text-anchor="middle">inventory, config,</text>
+      <text class="d" x="370" y="744" text-anchor="middle">library</text>
+
+      <!-- Receive into software -->
+      <line class="f" x1="435" y1="290" x2="488" y2="290" marker-end="url(#ar)"/>
+      <text class="lab" x="462" y="283" text-anchor="middle">frames</text>
+
+      <!-- Software, left column -->
+      <rect class="box" x="490" y="250" width="160" height="80" rx="4"/>
+      <text class="t" x="570" y="272" text-anchor="middle">Frame decoder</text>
+      <text class="d" x="570" y="290" text-anchor="middle">PGN · SA · DA · TP</text>
+      <text class="d" x="570" y="305" text-anchor="middle">drops own traffic</text>
+      <text class="d" x="570" y="320" text-anchor="middle">input limits</text>
+      <line class="f" x1="570" y1="330" x2="570" y2="398" marker-end="url(#ar)"/>
+      <text class="lab" x="578" y="366">to logger</text>
+      <rect class="box" x="490" y="400" width="160" height="100" rx="4"/>
+      <text class="t" x="570" y="420" text-anchor="middle">Address manager</text>
+      <text class="d" x="570" y="437" text-anchor="middle">claims from 247 down</text>
+      <text class="d" x="570" y="452" text-anchor="middle">skips known, reserved</text>
+      <text class="d" x="570" y="467" text-anchor="middle">250 ms wait · 1 retry</text>
+      <text class="d" x="570" y="482" text-anchor="middle">answers claims · NACKs</text>
+      <rect class="box" x="490" y="530" width="160" height="100" rx="4"/>
+      <text class="t" x="570" y="550" text-anchor="middle">Request scheduler</text>
+      <text class="d" x="570" y="567" text-anchor="middle">claim sweep / 10 min</text>
+      <text class="d" x="570" y="582" text-anchor="middle">Time/Date · VIN</text>
+      <text class="d" x="570" y="597" text-anchor="middle">CI · SOFT · ECU ID</text>
+      <text class="d" x="570" y="612" text-anchor="middle">1.25 s · 1 retry</text>
+      <rect class="box guard" x="490" y="660" width="160" height="100" rx="4"/>
+      <text class="t" x="570" y="682" text-anchor="middle">Transmit guard</text>
+      <text class="d" x="570" y="699" text-anchor="middle">allow-list · rate cap</text>
+      <text class="d" x="570" y="714" text-anchor="middle">1 request per address</text>
+      <text class="d" x="570" y="729" text-anchor="middle">off on any error</text>
+      <text class="d" x="570" y="744" text-anchor="middle">or error-passive</text>
+
+      <!-- Transmit path -->
+      <path class="f tx" d="M490,486 H480 V700 H488" marker-end="url(#ar-tx)"/>
+      <text class="lab tx" x="476" y="600" text-anchor="middle" transform="rotate(-90 476 600)">claims · NACKs</text>
+      <line class="f tx" x1="570" y1="630" x2="570" y2="658" marker-end="url(#ar-tx)"/>
+      <text class="lab tx" x="562" y="649" text-anchor="end">requests</text>
+      <path class="f tx" d="M490,748 H446 V318 H437" marker-end="url(#ar-tx)"/>
+      <text class="lab tx" x="442" y="520" text-anchor="middle" transform="rotate(-90 442 520)">only path to the bus</text>
+
+      <!-- Decoded events trunk -->
+      <line class="f" x1="650" y1="290" x2="670" y2="290"/>
+      <line class="f" x1="670" y1="145" x2="670" y2="575"/>
+      <line class="f" x1="670" y1="145" x2="688" y2="145" marker-end="url(#ar)"/>
+      <line class="f" x1="670" y1="290" x2="688" y2="290" marker-end="url(#ar)"/>
+      <line class="f" x1="670" y1="450" x2="688" y2="450" marker-end="url(#ar)"/>
+      <line class="f" x1="670" y1="575" x2="688" y2="575" marker-end="url(#ar)"/>
+      <text class="lab" x="657" y="200" text-anchor="middle" transform="rotate(-90 657 200)">decoded events</text>
+
+      <!-- Software, right column -->
+      <rect class="box train" x="690" y="110" width="160" height="70" rx="4"/>
+      <text class="t" x="770" y="134" text-anchor="middle">Known-good trainer</text>
+      <text class="d" x="770" y="152" text-anchor="middle">manual · coverage report</text>
+      <text class="d" x="770" y="168" text-anchor="middle">off · idle · drive · PTO</text>
+      <rect class="box" x="690" y="250" width="160" height="100" rx="4"/>
+      <text class="t" x="770" y="270" text-anchor="middle">Connection detector</text>
+      <text class="d" x="770" y="287" text-anchor="middle">new NAME · new SA</text>
+      <text class="d" x="770" y="302" text-anchor="middle">claim conflicts</text>
+      <text class="d" x="770" y="317" text-anchor="middle">sweep changes</text>
+      <text class="d" x="770" y="332" text-anchor="middle">60 s silence = end</text>
+      <line class="f" x1="770" y1="350" x2="770" y2="398" marker-end="url(#ar)"/>
+      <text class="lab" x="778" y="378">new device</text>
+      <rect class="box" x="690" y="400" width="160" height="100" rx="4"/>
+      <text class="t" x="770" y="420" text-anchor="middle">Request &amp; DM monitor</text>
+      <text class="d" x="770" y="437" text-anchor="middle">unique PGNs · counts</text>
+      <text class="d" x="770" y="452" text-anchor="middle">first 100 requests</text>
+      <text class="d" x="770" y="467" text-anchor="middle">control flags · DM</text>
+      <text class="d" x="770" y="482" text-anchor="middle">known device: new PGN</text>
+      <line class="f" x1="770" y1="500" x2="770" y2="528" marker-end="url(#ar)"/>
+      <text class="lab" x="778" y="519">PGNs</text>
+      <rect class="box" x="690" y="530" width="160" height="100" rx="4"/>
+      <text class="t" x="770" y="550" text-anchor="middle">Device identifier</text>
+      <text class="d" x="770" y="567" text-anchor="middle">type · make · model</text>
+      <text class="d" x="770" y="582" text-anchor="middle">ECU · trailer · external</text>
+      <text class="d" x="770" y="597" text-anchor="middle">ID source recorded</text>
+      <text class="d" x="770" y="612" text-anchor="middle">severity assigned</text>
+      <line class="f" x1="690" y1="605" x2="652" y2="605" marker-end="url(#ar)"/>
+      <text class="lab" x="670" y="648" text-anchor="middle">ask identity</text>
+      <rect class="box" x="690" y="660" width="160" height="100" rx="4"/>
+      <text class="t" x="770" y="682" text-anchor="middle">Admin · health</text>
+      <text class="d" x="770" y="699" text-anchor="middle">restart · retrain</text>
+      <text class="d" x="770" y="714" text-anchor="middle">diagnostic log</text>
+      <text class="d" x="770" y="729" text-anchor="middle">watchdog · self-check</text>
+      <text class="d" x="770" y="744" text-anchor="middle">config push</text>
+
+      <!-- Data and outputs -->
+      <rect class="box" x="1005" y="110" width="200" height="70" rx="4"/>
+      <text class="t" x="1105" y="134" text-anchor="middle">Known-good inventory</text>
+      <text class="d" x="1105" y="152" text-anchor="middle">entry IDs · NAME · VIN</text>
+      <text class="d" x="1105" y="168" text-anchor="middle">versioned · approve · remove</text>
+      <rect class="box" x="1005" y="230" width="200" height="82" rx="4"/>
+      <text class="t" x="1105" y="252" text-anchor="middle">Device library</text>
+      <text class="d" x="1105" y="270" text-anchor="middle">characterized devices</text>
+      <text class="d" x="1105" y="285" text-anchor="middle">manufacturer code list</text>
+      <text class="d" x="1105" y="300" text-anchor="middle">deployed with the code</text>
+      <rect class="box" x="1005" y="350" width="200" height="130" rx="4"/>
+      <text class="t" x="1105" y="372" text-anchor="middle">Event log</text>
+      <text class="d" x="1105" y="390" text-anchor="middle">one file per session</text>
+      <text class="d" x="1105" y="405" text-anchor="middle">SA · NAME · category</text>
+      <text class="d" x="1105" y="420" text-anchor="middle">PGNs · flags · severity</text>
+      <text class="d" x="1105" y="435" text-anchor="middle">UTC + vehicle time</text>
+      <text class="d" x="1105" y="450" text-anchor="middle">hash chain across sessions</text>
+      <text class="d" x="1105" y="465" text-anchor="middle">raw frames per event</text>
+      <rect class="box" x="1005" y="540" width="200" height="80" rx="4"/>
+      <text class="t" x="1105" y="562" text-anchor="middle">Maintenance laptop</text>
+      <text class="d" x="1105" y="580" text-anchor="middle">retrieve · verify chain</text>
+      <text class="d" x="1105" y="596" text-anchor="middle">train · approve · remove</text>
+      <text class="d" x="1105" y="612" text-anchor="middle">report + CSV</text>
+      <line class="f" x1="1105" y1="480" x2="1105" y2="538" marker-end="url(#ar)"/>
+      <rect class="box" x="1005" y="660" width="200" height="100" rx="4"/>
+      <text class="t" x="1105" y="682" text-anchor="middle">Config · keys · diagnostics</text>
+      <text class="d" x="1105" y="699" text-anchor="middle">versioned config, checked</text>
+      <text class="d" x="1105" y="714" text-anchor="middle">operator keys</text>
+      <text class="d" x="1105" y="729" text-anchor="middle">checked on the laptop</text>
+      <text class="d" x="1105" y="744" text-anchor="middle">diagnostic log</text>
+
+      <line class="f" x1="850" y1="145" x2="1003" y2="145" marker-end="url(#ar)"/>
+      <text class="lab" x="928" y="138" text-anchor="middle">writes</text>
+      <line class="f" x1="1005" y1="172" x2="853" y2="284" marker-end="url(#ar)"/>
+      <text class="lab" x="912" y="210" text-anchor="middle">known NAMEs</text>
+      <line class="f" x1="1005" y1="300" x2="853" y2="555" marker-end="url(#ar)"/>
+      <text class="lab" x="925" y="400" text-anchor="end">decode make</text>
+      <line class="f" x1="850" y1="600" x2="1003" y2="452" marker-end="url(#ar)"/>
+      <text class="lab" x="922" y="582" text-anchor="middle">new event</text>
+      <line class="f" x1="1005" y1="612" x2="853" y2="690" marker-end="url(#ar)"/>
+      <text class="lab" x="958" y="668" text-anchor="middle">SSH commands</text>
+      <line class="f" x1="850" y1="725" x2="1003" y2="725" marker-end="url(#ar)"/>
+      <text class="lab" x="928" y="718" text-anchor="middle">applies</text>
+    </svg>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="sw"></i>Receive path and data flow</span>
+      <span><i class="sw tx"></i>Transmit path: the logger sends on the bus</span>
+      <span><i class="sw guard"></i>Transmit guard: the only path to the bus</span>
+      <span><i class="sw dash"></i>Training mode only</span>
+      <span><i class="sw ext"></i>Device being detected</span>
+    </div>
+    <figcaption>Each session starts listen-only until the bit rate (250 or 500 kbit/s) is confirmed. The logger receives every frame on the bus. It transmits only through the transmit guard: its own address claim, scheduled requests (an address-claim sweep every 10 minutes, Time/Date and VIN at every session start, and identification requests to unrecognized source addresses, or to every device during training), and the responses J1939 requires of a node. The guard enforces the allow-list, 10 frames/s and one outstanding request per address, and turns transmission off for the rest of the session on bus-off, error-passive or any transmit error. The logger provides no data to the network. Records are hash-chained within and across sessions. Training, approvals, removals and config pushes run from the maintenance laptop over SSH, one key per person. Signed seals, separate operator and admin roles, signed updates, move and wipe are deferred to future work.</figcaption>
+  </figure>
+
+  <section>
+    <h2>Prototype platform</h2>
+    <p class="lede">The DG Beacon is the prototype platform because the team already has two, they are rated for vehicle use (6–32 VDC, −40 to +85 °C), and they run Linux with multiple CAN channels. It is a development and test instrument, not an installation device: its size, its roughly 1.6 A draw, and mounting it at the diagnostic port make it unsuitable for permanent installation in a fleet vehicle. The logger software is written for Linux and SocketCAN so it can move to a smaller, low-power in-vehicle logger for deployment.</p>
+  </section>
+
+  <section>
+    <h2>Components and the functions they cover</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Component</th><th>What it does</th><th>Event logger functions covered</th></tr></thead>
+        <tbody>
+          <tr><td>CAN channel</td><td>Beacon hardware channel on a purpose-built short tap (target under 0.5 m of added stub), termination off. Starts each session listen-only to confirm 250 or 500 kbit/s, then switches to normal mode; with no bit rate confirmed it never transmits and logs a fault after 60 s. Covers a single J1939 network at the 9-pin port</td><td>Physical access to the J1939 bus</td></tr>
+          <tr><td>Clock · power</td><td>Battery-backed real-time clock (added if the Beacon lacks one), with vehicle Time/Date and time since wake as fallbacks; sleeps at key-off and wakes on CAN activity, recording wake and ready times. Must resume cleanly after a cranking brownout</td><td>Timestamps; logger start and ready times</td></tr>
+          <tr><td>Status lights</td><td>One light, three patterns: steady (recording, all good), slow blink (needs attention: new device, needs training or training running) and fast blink (fault); off while starting. The slow blink stays until each high-severity event is reviewed and cleared; <code>status</code> on the laptop gives the detail. When conditions overlap, fast blink wins over slow blink and slow blink over steady. A Beacon LED if software-controllable, otherwise a small indicator or the status file</td><td>Status indication</td></tr>
+          <tr><td>Storage</td><td>microSD card for session files, raw captures, inventories, config and library versions, with 500 MB reserved for event files; a failing card is a high fault. Supporting files are written atomically. (Signing keys and an internal-flash fallback are deferred)</td><td>Durable, tamper-evident storage</td></tr>
+          <tr><td>SocketCAN</td><td>Linux CAN interface used through raw CAN sockets: every frame received with a kernel timestamp and a large receive buffer. J1939 itself (address claiming, multi-packet transfers and their handshakes) is handled in the logger's own code; the kernel J1939 driver is an optional later optimization</td><td>Capture; transmit path</td></tr>
+          <tr><td>Frame decoder</td><td>Splits each ID into PGN, source and destination; reassembles multi-packet transfers within fixed limits (32 open, 1785 bytes, J1939-21 timeouts); decodes NAME fields; drops the logger's own transmissions and replies addressed to it; counts malformed frames without stopping</td><td>Feeds all detection functions; excludes own traffic; resists bus input attacks</td></tr>
+          <tr><td>Address manager</td><td>Claims from 247 downward, skipping addresses seen in the baseline and a configurable reserved list (starting with 128 and 142). Arbitrary-address-capable NAME in the on-highway industry group with every other field at its maximum, so it loses conflicts with vehicle devices. Waits 250 ms after any claim before other traffic. On a loss, tries one more address; on a second loss, sends "cannot claim", goes receive-only and logs it. Answers Request for Address Claim and NACKs other requests to its address</td><td>Claims address 128 to 247, always concedes; responds only where J1939 requires</td></tr>
+          <tr><td>Request scheduler</td><td>Sends a global Request for Address Claim after claiming and every 10 minutes; requests vehicle Time/Date (65254) and VIN (65260) at every session start and VIN during training; requests Component ID (65259), Software ID (65242) and ECU ID (64965) from each unrecognized source address, and from every device during training. Waits 1.25 s, retries once, records reply, NACK or no response, and does not repeat a failed request in the same session</td><td>Request identification; inventory NAMEs; vehicle time; VIN check</td></tr>
+          <tr><td>Transmit guard</td><td>The only path to the bus. Enforces the allow-list, 10 frames/s in total and one outstanding request per address, with protocol responses ahead of requests. Turns transmission off for the rest of the session on bus-off, error-passive from its own transmit errors, any unexpected error, or a frame that would break the allow-list or rate cap; that frame is never sent</td><td>Non-disruption; transmit restraint</td></tr>
+          <tr><td>Known-good trainer</td><td>Started from the maintenance laptop with only approved devices connected; follows the written procedure across key-on engine off, idle, driving and PTO where fitted (PTO from Power Takeoff Information 1, PGN 65264, engaged when Power Takeoff Speed is above zero, otherwise declared by the operator); <code>train status</code> shows coverage during training and <code>train finish</code> reports conditions covered and PGNs per ECU; ends automatically after a timeout; a person confirms the inventory before it is applied. Nothing is ever added automatically</td><td>Train to known-good connections; generate list of known-good connections</td></tr>
+          <tr><td>Connection detector</td><td>Matches each session's claims to the inventory by NAME; flags new NAMEs, new source addresses (including devices that never claim) and replies to unknown addresses; logs claim conflicts and NAMEs that appear or disappear between sweeps; closes a connection after 60 s of silence while the bus is active, or at key-off, with the last frame as its end time. A VIN that differs from the inventory's puts the session in untrained mode</td><td>Associate claimed addresses to known-good connections; detect new connection events and their end</td></tr>
+          <tr><td>Request &amp; DM monitor</td><td>For an unrecognized address, records each distinct PGN it sends (first seen, last seen, count, up to 2000 per connection) and its first 100 requests in order. Flags control PGNs TSC1 (0), TC1 (256), XBR (1024), Commanded Address (65240), Reset (56832) and DM11 clear codes (65235) from a connection, or from a known device without approval for that PGN. Flags a known device sending, or an approved device requesting, a PGN outside its trained and approved sets. Records DM1/DM2 requests, DM3/DM11 clears, DM14–DM16 memory access and DM18 security; logs proprietary PGNs without interpreting them</td><td>Log PGNs requested and sent by an unrecognized source address</td></tr>
+          <tr><td>Device identifier</td><td>Combines NAME fields, self-reported replies and the PGN record into type, make and possibly model, using the device library. Classifies each new device as a vehicle ECU not in the baseline (high), a trailer device (notice, only while it just broadcasts) or an external device (high; info once approved); records the identification source and the rule applied; assigns severity</td><td>Identify new connections by type, make, maybe model</td></tr>
+          <tr><td>Admin · health</td><td>Restart and retrain; the systemd watchdog heartbeat; the start-up self-check (a corrupt config faults, a corrupt inventory runs untrained; fallback to the last good version is deferred); config pushes with validation; the diagnostic log. Deferred: signed updates and rollback, operator and admin roles, the automatic hardening check, library push, move and wipe</td><td>Maintainability, reliability and access control</td></tr>
+          <tr><td>Device library</td><td>Characterized device types built on the bench, plus a published manufacturer code list still to be sourced. Entries match on NAME function codes and typical requested and sent PGNs, with source address only as a hint. Versioned and deployed with the software (library push deferred). Function, vehicle system and industry group codes from the licensed SAE J1939 Digital Annex are applied during analysis; all NAME fields are logged as raw numbers</td><td>Maintain the reference tables</td></tr>
+          <tr><td>Known-good inventory</td><td>Versioned at each confirmed training, approval or removal and tied to the vehicle by VIN. Each entry has a permanent entry ID, the raw NAME and decoded fields, make, addresses and vehicle states seen, category, self-reported identity, trained PGNs kept separate from PGNs approved later (each with reason and date), and how and when it was added. Records the vehicle configuration for future fleet profiles. Exported as CSV</td><td>Generate list of known-good connections</td></tr>
+          <tr><td>Event log</td><td>One JSON-lines file per session (wake or power-on to key-off), rolled over at 24 h, with a format version in the header. Connection records for unrecognized devices, vehicle ECUs not in the baseline and trailer devices (full) and approved devices (short); severity <span class="sev">info</span> <span class="sev">notice</span> <span class="sev">high</span>. Logger clock in UTC with clock source and vehicle Time/Date on every record. Records hash-chained within and across sessions (signed seals deferred). Every operator action is recorded in the session file. Raw CAN frames from 10 s before to 60 s after each new connection and control flag</td><td>Generate log of new connection events</td></tr>
+          <tr><td>Maintenance laptop</td><td>Windows command-line tool over SSH (USB or Ethernet) with 16 commands and one prompt pattern (what will change, a reason, then y/N): <code>status</code> as the home screen with a next step, training with <code>train status</code> and <code>train finish</code>, <code>approve</code> and <code>remove</code> for devices and PGNs, clears, config pushes, retrieval with a chain check, and a five-section report with CSV. Output uses plain words. Retrieval schedule and reviewer to be agreed with ORNL</td><td>Training, approvals, retrieval and review</td></tr>
+          <tr><td>Config · keys · diagnostics</td><td>One versioned config file, rejected if keys are unknown or missing or if it adds to the transmit allow-list; changes that weaken detection need confirmation and are logged at high severity. A size-capped diagnostic log records errors and restart causes, separate from the evidence</td><td>Settings; troubleshooting</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scope</h2>
+    <div class="cols">
+      <div class="card">
+        <h3>In scope</h3>
+        <ul>
+          <li>J1939 on CAN</li>
+          <li>Address claim and NAME, including a periodic address-claim sweep</li>
+          <li>New source address, including devices that never claim an address</li>
+          <li>Address-claim conflicts</li>
+          <li>All PGNs sent by an unrecognized source address; requests kept in order</li>
+          <li>Control PGN flags: TSC1, TC1, XBR, Commanded Address, Reset, DM11 clear codes</li>
+          <li>Responses to an unknown source address</li>
+          <li>Diagnostic messages: DM1/DM2 requests, DM3/DM11 clears, DM14–DM16 memory access, DM18 security</li>
+          <li>Self-reported identity: Component, Software and ECU ID</li>
+          <li>Proprietary PGNs, logged but not interpreted</li>
+          <li>New PGN from a known or approved device (pending a check with ORNL)</li>
+          <li>Vehicle ECUs not in the baseline and trailer devices, classified separately</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Out of scope</h3>
+        <ul>
+          <li>Timing and cadence detection</li>
+          <li>Below-message detection</li>
+          <li>Identifying devices that do not claim an address, beyond the PGNs they send</li>
+          <li>Devices sharing a source address without claiming it</li>
+          <li>Other atypical behavior from a known source address, such as timing</li>
+          <li>Networks other than the single J1939 network at the 9-pin port; 16-pin connectors (known limit)</li>
+          <li>Interpreting proprietary PGN content</li>
+          <li>Listen-only devices</li>
+          <li>J1708/J1587 (needs different hardware)</li>
+          <li>Physical tamper protection (seals, locked enclosure)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Future work</h3>
+        <ul>
+          <li>ISO 15765 diagnostics over CAN (same hardware, decoding only)</li>
+          <li>Fleet profiles: shared inventories for trucks of the same configuration</li>
+          <li>Onboard screen in place of the maintenance laptop</li>
+          <li>Two-person approval for control PGNs and removing trained ECUs</li>
+          <li>Deferred from the prototype: signed seals, operator and admin roles, signed updates and rollback, move and wipe, library push, internal-flash fallback, 7-day soak, fuzz testing, Linux laptop support</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>

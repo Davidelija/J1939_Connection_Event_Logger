@@ -1,0 +1,6 @@
+# Safety-critical paths need a review by a project member (Vaughan Lynn or Elijah Umaru), not only CI.
+/src/j1939logger/transmit.py   @vaughan2017 @Davidelija
+/src/j1939logger/config.py     @vaughan2017 @Davidelija
+/src/j1939logger/eventlog.py   @vaughan2017 @Davidelija
+/src/j1939logger/platform/     @vaughan2017 @Davidelija
+/docs/                         @vaughan2017 @Davidelija
