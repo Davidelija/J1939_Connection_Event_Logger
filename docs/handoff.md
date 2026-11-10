@@ -187,7 +187,7 @@ Every ID cited in the requirements' Source column is defined here or in the tabl
 j1939-logger/
   CLAUDE.md                  standing rules (see Ground rules)
   README.md
-  pyproject.toml             Python 3, standard library at run time (python-can optional extra); dev: pytest, hypothesis, ruff, mypy, pytest-cov
+  pyproject.toml             Python 3, standard library at run time (python-can optional extra); dev: pytest, hypothesis, ruff, mypy, pytest-cov, import-linter, python-can (test harness only)
   LICENSE                    MIT
   CHANGELOG.md               one entry per tagged release
   docs/
@@ -241,12 +241,17 @@ j1939-logger/
     verify_chain.py          standalone chain verifier
     anonymize_capture.py     scrubs VINs and serial numbers from candump files before they go in tests/fixtures/rig/
     findings/                findings-report scoring scripts (separate chat)
-  tests/
-    unit/
-    replay/                  vcan0 replay tests
-    malformed/               generated malformed frames and transfers (SC-12a)
-    fixtures/                candump files, configs, inventories; rig/ holds rig captures, VINs anonymized
-  bench/                     acceptance tests A1 to A8 (platform-neutral) and SC-11 replays
+    fixtures/                scenario.py: one scenario description → a fixture folder and its findings ground truth (DC-4)
+  tests/                     levels as in docs/modules.md §5 and docs/test-plan.md §2
+    unit/                    level 1: module public functions (developers)
+    contract/                level 1: Protocol conformance, public-name imports; import-linter layering config (developers)
+    malformed/               level 1: generated malformed frames and transfers (SC-12a)
+    component/               level 2: session in-process with fixture folders, FakeClock and the fault plan (test-script writers)
+    replay/                  level 3: service on vcan0, witness, ecu_sim, j1939cmd over ssh localhost (test-script writers)
+    harness/                 witness, ecu_sim, logger_proc, records, frames (test-script writers)
+    fixtures/                fixture folders (traffic.log, manifest.json); rig/ holds rig captures, VINs anonymized
+  bench/                     level 4: acceptance tests A1 to A8 (platform-neutral); B-HW1, B-HW3, B-PLT2, B-STS20, B-SN1; SC-9, SC-10 and SC-11 run sheets
+    checklists.md            every D, I and A requirement with step, observer and evidence
     tools/                   scripted address-claim contender for A3
   demo/
     run_demo.sh              no-hardware demo on vcan0; also the CI smoke test
@@ -352,12 +357,12 @@ Build in this order. A step is done when its tests pass in CI (with ruff and myp
 - **Replay tests:** start the logger against `vcan0`, replay a candump fixture with `canplayer`, then check the session file, raw captures, inventory and status file. A second socket on `vcan0` records everything the logger sends, standing in for the witness Beacon.
 - **Malformed-input tests (`tests/malformed`, SC-12a):** Hypothesis generates frames with bad lengths, out-of-order and oversize transport transfers, ETP transfers, 11-bit, remote and error frames, bad NAMEs and floods of new addresses; `decode` and `monitor` must raise no unhandled exception, keep running and stay within the DET-19 limits.
 - **Formats and levels:** the fixture folder format, matching rules, injection points and the four test levels are in `docs/modules.md` §5; this section lists the scenarios, CI and acceptance tests.
-- **Naming:** each test name starts with the requirement ID it verifies, for example `test_NP_14_request_timeout_and_retry`. The test report is the verification record for every requirement marked T. `docs/verification.md` lists every requirement with its method, test or procedure step and result; a CI check fails if a T requirement has no test, skipping rows whose status is Deferred. A second check fails a release while any `docs/errors.md` row still has a placeholder in its Test column.
+- **Naming:** each test name starts with the requirement ID it verifies, for example `test_NP_14_request_timeout_and_retry`. The test report is the verification record for every requirement marked T. `docs/verification.md` lists every requirement with its method, test or procedure step and result; a CI check fails if a T requirement has no test once its build step has merged (the Step column, DC-2), skipping rows whose status is Deferred; for step 8 requirements a `bench/` procedure ID satisfies it, and before a release tag every T row needs a passing test, a procedure with a result, or a recorded gap. The test plan is `docs/test-plan.md`. A second check fails a release while any `docs/errors.md` row still has a placeholder in its Test column.
 - **Fault injection:** the desktop platform implementation can simulate every error in `docs/errors.md` (CAN interface lost, bus-off, ENOBUFS, kernel drops, storage errors, card removed, slow sync, clock jumps), so each row gets a unit or replay test named by its requirement ID.
 - **Fixtures:** start from the session 142 example files. Add one candump fixture per scenario: new scan tool, approved ELD connecting, late-waking ECU, non-claiming device, address conflict, a Commanded Address to the logger's NAME (ignored, no address change), a replacement card (declared chain break), a known ECU at a new address (an address\_change record and no false new-PGN or reply events), baseline ECUs claiming before the logger is ready (no DET-2 or DET-3 events), a copied NAME at a free address while the real ECU keeps sending (high same-NAME conflict), an approved address move that does not recur, control PGN, control PGN late in a connection, VIN mismatch, untrained truck, key-off mid-connection, 24 h roll-over, software restart, no confirmed bit rate, PGN approval, training coverage, vehicle ECU not in baseline (high), trailer device (notice), a trailer NAME that sends a diagnostic request (reclassified high), device and PGN removal, an event arriving between events and approve, an unknown config key, an unknown format version, a capture hang, a nearly full and a full card, a failing card, a truncated last line, a corrupt inventory, a transmit error, many new NAMEs at once (input limits), an oversize transfer and a detection-weakening config. Rig captures go in `tests/fixtures/rig/` only after `tools/anonymize_capture.py` has scrubbed them.
 - **Time:** inject wall-clock and monotonic time through the platform layer, including clock jumps, so tests can run 60 s silences, 10 minute sweeps and 24 h roll-overs in seconds.
-- **CI:** GitHub Actions loads the `vcan` kernel module and runs all unit, replay and malformed-input tests, ruff, mypy, a coverage report (no threshold) and `demo/run_demo.sh` as an end-to-end smoke test on every push, on Python 3.9 (DC-1) until step 2a confirms the Beacon's version, with dependencies pinned by version and hash.
-- **Acceptance tests (`bench/`):** platform-neutral written procedures that any platform must pass after porting, run on the rig with Beacon 2 (or any independent recorder) as witness and traffic source (`cangen`). Each has setup, steps, a pass criterion and a results line (date, platform, result, evidence file). A1 bit-rate detection (SC-2, NP-1); A2 listen-only start, then normal mode (NP-1, NP-2); A3 transmit-guard witness test (NP-3, NP-9, NP-16, NP-18, SC-4); A4 60% load with bursts, recording CPU, memory and drops (SC-9, PLT-7); A5 power loss and cranking brownout (HW-6, LOG-5, LOG-12, LOG-14); A6 wake and ready time (HW-8); A7 real-time clock across power loss (HW-7, PLT-3, LOG-16); A8 status light and watchdog restart (STS-1, STS-18, PLT-8). The minimum acceptance setup in `docs/porting.md` runs them without a vehicle. SC-11 replays the `tests/fixtures/` scenarios on the rig, and LAP-1 is checked by a manual procedure on a Windows laptop.
+- **CI:** GitHub Actions loads the `vcan` kernel module and runs all unit, contract, malformed-input, component and replay tests, ruff, mypy, import-linter, a coverage report (no threshold) and `demo/run_demo.sh` as an end-to-end smoke test on every push, on Python 3.9 (DC-1) until step 2a confirms the Beacon's version, with dependencies pinned by version and hash.
+- **Acceptance tests (`bench/`):** platform-neutral written procedures that any platform must pass after porting, run on the rig with Beacon 2 (or any independent recorder) as witness and traffic source (`cangen`). Each has setup, steps, a pass criterion and a results line (date, platform, result, evidence file). A1 bit-rate detection (SC-2, NP-1); A2 listen-only start, then normal mode (NP-1, NP-2); A3 transmit-guard witness test (NP-3, NP-9, NP-16, NP-18, SC-4); A4 60% load with bursts, recording CPU, memory and drops (SC-9, PLT-7); A5 power loss and cranking brownout (HW-6, LOG-5, LOG-12, LOG-14); A6 wake and ready time (HW-8); A7 real-time clock across power loss (HW-7, PLT-3, LOG-16); A8 status light and watchdog restart (STS-1, STS-18, PLT-8). The minimum acceptance setup in `docs/porting.md` runs them without a vehicle. SC-11 replays the `tests/fixtures/` scenarios on the rig, and LAP-1 is checked by a manual procedure on a Windows laptop. `bench/` also holds the procedures for the other hardware requirements (B-HW1 tap stub, B-HW3 supply range, B-PLT2 CAN controller features, B-STS20 hardening, B-SN1 the `install.sh` next-session prompt) and `bench/checklists.md`, one item for every requirement verified by D, I or A (`docs/test-plan.md` §8 and §9).
 
 ## Documentation to deliver
 
