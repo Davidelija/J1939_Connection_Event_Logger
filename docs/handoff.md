@@ -1,6 +1,6 @@
 # J1939 Event Logger: Claude Code Hand-off
 
-Nov 7, 2026 · @Vaughan
+Nov 9, 2026 · @Vaughan
 
 ## Purpose and source of truth
 
