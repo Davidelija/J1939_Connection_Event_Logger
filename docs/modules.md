@@ -328,7 +328,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 - Faults: the `DesktopPlatform` fault plan, using the kinds in the Kind column of `docs/errors.md`.
 - Commands: the `cmdserver` socket, or `j1939cmd` at level 3.
 
-**Who owns what:** test-script writers own `tests/fixtures/`, the fixture manifests and `tools/findings/`; developers own `src/` and the unit tests. Either side changes the other's area only through a DC entry.
+**Who owns what:** test-script writers own `tests/fixtures/`, the fixture manifests, `tools/fixtures/` (including `scenario.py`, which writes each fixture folder and its findings ground-truth file, `docs/findings-data/scenarios/<scenario>.json`, from one description), `tests/harness/`, `tests/component/` (level 2, including its fixture runner), `tests/replay/` (level 3), the `bench/` procedures and `bench/checklists.md`, and `tools/findings/`; developers own `src/`, the unit tests and the contract tests (`tests/contract/`). Either side changes the other's area only through a DC entry (DC-4).
 
 **Contract tests:** mypy checks each implementation against its `Protocol` (for example `platform/interface.py`), and one test per module imports only the public names in section 4, so a hidden dependency fails CI.
 

@@ -20,7 +20,7 @@ If these documents disagree, the requirements win, then `docs/log-format.md` on 
 
 1. Read the documents above before changing code.
 2. Work one build step at a time, in the order in `docs/handoff.md`. A step is done when every item in the pull request template is ticked (rule 17).
-3. Every test name starts with the requirement ID it verifies, for example `test_NP_14_request_timeout_and_retry`. Every requirement marked T, except those marked Deferred, gets at least one test; keep `docs/verification.md` current (CI fails if a T requirement that is not Deferred has no test).
+3. Every test name starts with the requirement ID it verifies, for example `test_NP_14_request_timeout_and_retry`. Every requirement marked T, except those marked Deferred, gets at least one test; keep `docs/verification.md` current. CI fails if a T requirement that is not Deferred has no test once its build step (the Step column) has merged; for step 8 requirements a `bench/` procedure ID counts (DC-2). The test plan is `docs/test-plan.md`.
 4. All bus transmission goes through the `transmit` module. Never add a PGN to the transmit allow-list, never send a command, clear or write, never resume transmitting in a session after NP-18 turns it off, and never raise the rate cap (10 frames/s, one outstanding request per destination). If a task seems to need one, stop and ask.
 5. Use raw CAN sockets; J1939 (address claiming, transport protocol) is handled in this code. Kernel J1939 sockets are an optional later optimization.
 6. Keep `capture` behind its interface (frames in, timestamped records out); nothing else touches the CAN socket for receiving.
@@ -38,9 +38,9 @@ If these documents disagree, the requirements win, then `docs/log-format.md` on 
 
 ## Environment
 
-- Python 3 with the standard library at run time; `python-can` only as an optional extra in the platform layer; dev tools `pytest`, `hypothesis`, `ruff`, `mypy` and `pytest-cov`; all pinned by version and hash. The laptop tool targets Windows. Keep other dependencies to the standard library.
+- Python 3 with the standard library at run time; `python-can` only as an optional extra in the platform layer; dev tools `pytest`, `hypothesis`, `ruff`, `mypy`, `pytest-cov`, `import-linter` (layering check, `docs/modules.md` §2) and `python-can` (test harness only: the witness and `ecu_sim`; `src/` imports it only in `platform/`); all pinned by version and hash. The laptop tool targets Windows. Keep other dependencies to the standard library.
 - Tests load the `vcan` kernel module and use `canplayer` and `candump` from can-utils.
-- Hardware-only checks live in `bench/` as platform-neutral acceptance tests A1 to A8 (written procedures), not automated tests.
+- Hardware-only checks live in `bench/` as written procedures, not automated tests: platform-neutral acceptance tests A1 to A8, the B-procedures (B-HW1, B-HW3, B-PLT2, B-STS20, B-SN1) and `bench/checklists.md` for every D, I and A requirement. Test levels and folders are in `docs/test-plan.md` §2.
 - The code is provided under the MIT License (`LICENSE`).
 - `demo/run_demo.sh` is the no-hardware demo and runs in CI as an end-to-end smoke test.
 - From Tuesday, Nov 10, 2026, `docs/` is the only copy of the specs; edit them here (decision X19).
