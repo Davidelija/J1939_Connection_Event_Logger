@@ -7,7 +7,7 @@ Design guidance for each module: what it is for, what goes in and comes out, wha
 - **Freeze:** before a build step starts, the contracts it touches are frozen for that step (table below). Tests for the step are written against the frozen version.
 - **Names in code:** types below are written as Python dataclasses; field names are the contract. Internal helpers are free.
 
-## 1. Shared types (`src/j1939logger/types.py`)
+## 1. Shared types (`src/j1939logger/types.py`) — frozen for step 1
 
 Defined once, in build step 1, and imported everywhere. Tests build fixtures from these.
 
@@ -122,7 +122,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 
 ## 4. Module contracts
 
-### platform  (v2, layer 0)
+### platform  (v2, layer 0) — frozen for step 1
 - **Purpose:** the hardware boundary. Desktop (`vcan0`) and Beacon implementations; tests use the desktop one with a fault plan.
 - **Interface:** `open_can(listen_only: bool) -> socket`; `bitrate_check() -> int | None`; `set_light(pattern: str)` ("steady" | "slow" | "fast" | "off"); `now() -> ClockReading`; `rtc_ok() -> bool`; `on_wake() -> (wake_mono, ready_mono)`; `watchdog_kick()`; `paths() -> Paths` (card, flash, keys; `Paths` is defined in `platform/interface.py`, DC-6); `fault(op: str)` (v2, DC-5), called by layer 1 modules just before each operation in `FAULT_OPS` (`can_recv`, `can_send`, `card_write`, `card_sync`, `flash_write`); it raises a planned fault on the desktop and does nothing on hardware.
 - **Time:** `now()` reports `rtc` when the real-time clock is valid, otherwise `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset (DC-6).
@@ -131,7 +131,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Test seam:** `DesktopPlatform(fault_plan=[(at_mono, kind, args), ...], clock=FakeClock())` controls time and injects the platform's faults (DC-5): `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `fault(op)` `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync`. A fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run. Other kinds are injected by traffic, the harness or test setup (DC-5).
 - **Requirements:** PLT-1 to PLT-8, HW-7, HW-8, STS-1, STS-18. **Not responsible for:** any J1939 logic.
 
-### clock  (v1, layer 1)
+### clock  (v1, layer 1) — frozen for step 1
 - **Purpose:** one source of time and its validity.
 - **Inputs:** `platform.now()`; Time/Date replies (`J1939Msg`, PGN 65254) from the main loop.
 - **Outputs:** `now() -> ClockReading`; `mono() -> float`; `to_utc(ts_mono) -> datetime | None` (the only way any module turns a frame or event time into a record's `utc`); a `time_sync` or `fault` `Record` when the source changes or vehicle time disagrees by more than `clock.max_skew_min`.
@@ -145,7 +145,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Rules:** unknown or missing keys rejected; additions to `requests.allow_list` or `transmit.allow_list` rejected; `detection.move_grace_s` over 5 s rejected; detection-weakening changes need `--confirm` (STS-9).
 - **Config:** all keys in the requirements' Configuration table. **Requirements:** LOG-13, STS-9. **Test seam:** pure functions `validate(new, old) -> Config | ConfigError`, `validate_inventory` and `validate_library`.
 
-### capture  (v1, layer 1)
+### capture  (v1, layer 1) — frozen for step 1
 - **Purpose:** frames in, timestamped records out (rule 6).
 - **Inputs:** `platform.open_can()`; mode changes from `session` (listen-only, normal): `capture` closes the socket and calls `open_can(listen_only=False)` (DC-6).
 - **Rules:** sets the receive buffer from `can.rx_buffer_bytes` (`SO_RCVBUFFORCE`) and reads it back (DC-6); calls `platform.fault("can_recv")` before each receive (DC-5).
@@ -155,7 +155,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Performance budget:** frames/s at 100% load at 500 kbit/s with no kernel drops, and µs per frame: to be measured in SC-9 (build step 8) and recorded here.
 - **Config:** `can.*`, `logging.raw_before_s`. **Requirements:** SC-2, NP-1 to NP-3, NP-17, LOG-15. **Test seam:** `DesktopPlatform` plus a candump replay on `vcan0`; the ring can be filled directly in unit tests.
 
-### decode  (v1, layer 2)
+### decode  (v1, layer 2) — frozen for step 1
 - **Purpose:** raw frames to J1939 messages.
 - **Inputs:** `list[Frame]`; the logger's current address.
 - **Outputs:** `list[J1939Msg]`; `DecodeStats` (11-bit, remote and error frames by type; TP closes by reason; malformed by reason; ETP transfers seen); `TxRequest`s for Connection Abort when a transfer to the logger is rejected.
@@ -212,7 +212,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Errors:** a corrupt file gives `InventoryError` from validation; `session` then runs untrained (STS-19).
 - **Config:** `training.*`. **Requirements:** TRN-2 to TRN-7, TRN-10 to TRN-15. **Test seam:** pure operations on an `Inventory` value (file round-trip tests belong to `store`).
 
-### eventlog  (v1, layer 1)
+### eventlog  (v1, layer 1) — frozen for step 1 (append only)
 - **Purpose:** append records to the session file and keep the hash chain (session files only).
 - **Inputs:** `Record`s from any layer 3 or 4 module via `session`; `sync_now()` requests; the starting `prev` from `session`.
 - **Outputs:** lines in the session file (adds `written`, `prev`, `hash`, assigns `event_id`); the last hash.
@@ -341,7 +341,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 
 | Build step | Contracts frozen before it starts |
 |---|---|
-| 1. Thin slice | `types`, `platform`, `capture`, `decode`, `eventlog` (append only), `clock` |
+| 1. Thin slice | `types`, `platform`, `capture`, `decode`, `eventlog` (append only), `clock` — **frozen 2026-11-13** |
 | 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` |
 | 2a. Beacon go/no-go | none (no code) |
 | 3. Transmit | `transmit`, `address`, `requests` |
