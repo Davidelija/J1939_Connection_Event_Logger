@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
+
+# Fixed seed in CI (test plan section 4); random seed elsewhere.
+settings.register_profile("ci", derandomize=True, print_blob=True)
+if os.environ.get("CI"):
+    settings.load_profile("ci")
 
 ROOT = Path(__file__).resolve().parent.parent
 _LEVELS = {"unit": "unit", "contract": "contract", "malformed": "malformed"}
