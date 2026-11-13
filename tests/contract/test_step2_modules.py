@@ -34,3 +34,14 @@ def test_SC_6_clock_v2_adds_veh_time_and_elapsed_s() -> None:
 
 def test_SC_6_admin_diag_log_public_names() -> None:
     assert {"log", "flush", "restart_cause", "last_restart_cause"} <= _public(DiagLog)
+
+
+def test_SC_6_session_and_eventlog_step_2_public_names() -> None:
+    from j1939logger.eventlog import EventLog, scan_tail
+    from j1939logger.session import Session
+
+    assert {"start", "step", "run", "stop"} <= _public(Session)
+    assert {"append", "sync_now", "start_sync", "stop_sync", "roll_over", "close"} <= _public(
+        EventLog
+    )
+    assert callable(scan_tail)

@@ -22,7 +22,7 @@ The logger keeps one event file per session plus a few supporting files on the m
 
 | Field | Meaning |
 | --- | --- |
-| `rec` | Record number within the session file, starting at 1 |
+| `rec` | Record number within the session, starting at 1; it keeps counting across the parts of a session, so event IDs stay unique (DC-11) |
 | `type` | Record type (table below) |
 | `sev` | Severity: `info`, `notice` or `high` |
 | `utc` | Time of the event (for a frame, its receive timestamp): logger clock in UTC, ISO 8601 with milliseconds. Every record also carries `written`, the time it was written, in the same format. While `clock_source` is `elapsed` there is no UTC: `utc` and `written` are null and the record carries `elapsed_s` instead (DC-10) |

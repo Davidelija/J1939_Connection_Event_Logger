@@ -31,6 +31,18 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-11 — Record numbers continue across parts; session_start keeps every field from step 2  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 2 PR 2 (branch `step-2-session`)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. `rec` counts within the session, not the file: it continues across parts, so event IDs (session and record number) stay unique after a roll-over.
+  2. From step 2, `session_start` carries every field in `docs/log-format.md`. Values built in later steps are written as placeholders until then: `vin` null with `vin_status` "unavailable", `logger_sa` null, `logger_claim` "not claimed (transmit starts in step 3)", `restart_guard` "not checked (step 3)", `operator_keys` from the keys folder (empty until step 7), `bitrate_check` saying the bit rate came from the platform until step 3 confirms it from frames.
+  3. The two `session_start` fields that log-format names but the example does not show are written as `prev_end_cause` (the cause from the diagnostic log, or null) and `bytes_cut_off` (bytes of an incomplete last line after a power loss, or 0).
+- **Why:** `rec` "within the session file" would reuse event IDs in every part; a fixed header layout from step 2 keeps later steps from changing the record shape.
+- **Affects:** `docs/log-format.md` (`rec`); `session`, `eventlog`. Format stays `log-1` (no release has shipped).
+- **Docs updated in the same change:** `docs/log-format.md`, `CHANGELOG.md`.
+- **Tests:** `test_LOG_2_*` (rec across parts), `test_LOG_6_*` (header fields).
+
 ## DC-10 — Step 2 freeze: time without a clock, vehicle time, state.json, parts, previous-session end, diagnostic log  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 2 freeze pull request #5 (gaps 1 to 10)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

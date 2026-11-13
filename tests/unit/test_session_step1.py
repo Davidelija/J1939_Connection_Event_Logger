@@ -96,7 +96,10 @@ def test_DET_16_new_claim_gives_synced_chained_connection_start(
         assert session.step() == 2
     finally:
         session.capture.stop()
-    [rec] = records(session.eventlog.path)
+    assert session.eventlog is not None
+    all_recs = records(session.eventlog.path)
+    assert all_recs[0]["type"] == "session_start"
+    [rec] = [r for r in all_recs if r["type"] == "connection_start"]
     assert (rec["type"], rec["sev"], rec["conn"], rec["sa"]) == (
         "connection_start",
         "high",
@@ -104,7 +107,7 @@ def test_DET_16_new_claim_gives_synced_chained_connection_start(
         0xF9,
     )
     assert rec["category"] == "external device (unrecognized)"
-    verify_chain([rec], ZERO_HASH)
+    verify_chain(all_recs, ZERO_HASH)
     assert synced, "connection_start was not synced at once"
     written = datetime.fromisoformat(rec["written"].replace("Z", "+00:00"))
     utc = datetime.fromisoformat(rec["utc"].replace("Z", "+00:00"))
@@ -128,11 +131,12 @@ def test_DET_16_connection_start_within_2_s_on_vcan0(tmp_path: Path) -> None:
         frame = struct.pack("=IB3x8s", 0x18EEFFF9 | 0x80000000, 8, SCAN_TOOL.to_bytes(8, "little"))
         sent = time.monotonic()
         tx.send(frame)
+        assert session.eventlog is not None
         path = session.eventlog.path
         recs: list[dict[str, Any]] = []
         while time.monotonic() - sent < 2.0:
             if path.exists() and path.read_bytes().endswith(b"\n"):
-                recs = records(path)
+                recs = [r for r in records(path) if r["type"] == "connection_start"]
                 if recs:
                     break
             time.sleep(0.01)
@@ -144,4 +148,4 @@ def test_DET_16_connection_start_within_2_s_on_vcan0(tmp_path: Path) -> None:
     assert recs, f"no connection_start within 2 s ({elapsed:.2f} s)"
     assert recs[0]["type"] == "connection_start" and recs[0]["sa"] == 0xF9
     assert elapsed <= 2.0
-    verify_chain(recs, ZERO_HASH)
+    verify_chain(records(path), ZERO_HASH)
