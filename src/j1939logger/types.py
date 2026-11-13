@@ -26,6 +26,7 @@ __all__ = [
     "ClockReading",
     "Record",
     "Connection",
+    "TxRequest",
     "PlatformError",
     "SEVERITIES",
     "CATEGORIES",
@@ -43,6 +44,7 @@ __all__ = [
     "APPROVAL_KINDS",
     "REMOVAL_KINDS",
     "ROLES",
+    "TX_KINDS",
 ]
 
 
@@ -131,6 +133,16 @@ class Connection:
     category: str  # Category enum in the requirements
 
 
+@dataclass(frozen=True)
+class TxRequest:
+    """A frame the logger asks transmit to send (DC-8); only transmit sends."""
+
+    pgn: int
+    da: int  # destination address, 255 for global
+    data: bytes
+    kind: str  # "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request" (TX_KINDS)
+
+
 class PlatformError(Exception):
     """The only exception type platform raises."""
 
@@ -204,3 +216,6 @@ APPROVAL_KINDS = ("inventory", "device", "PGN sent", "PGN requested", "address")
 REMOVAL_KINDS = ("remove device", "remove PGN sent", "remove PGN requested")
 
 ROLES = ("operator", "admin")
+
+# TxRequest.kind values (docs/modules.md, transmit).
+TX_KINDS = ("protocol", "request")

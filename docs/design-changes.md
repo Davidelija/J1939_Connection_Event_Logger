@@ -31,6 +31,21 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-8 — Step 1 freeze: defined outputs for capture and decode, TxRequest in the shared types, eventlog's step 1 scope  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, step 1 freeze pull request #3 (gaps 1 to 6)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** before the step 1 contracts freeze, outputs that were named but not defined are defined:
+  1. `CaptureStats`: `kernel_drops: int`, `rx_buffer_bytes: int`, `frames: dict[str, int]` (keys `extended`, `standard`, `remote`, `error`).
+  2. `DecodeStats`: `non_j1939: dict[str, int]` (keys `standard`, `remote`, `error`), `tp_closed: dict[str, int]` and `malformed: dict[str, int]` (by reason), `etp_seen: int`. Decode's state is a `DecodeState` that only `decode` reads or changes.
+  3. `TxRequest(pgn, da, data, kind)` moves, unchanged, from the `transmit` contract into the shared types (§1), so the frozen `decode` contract does not depend on `transmit`, which freezes in step 3.
+  4. `eventlog`'s step 1 freeze ("append only") covers appending a `Record`, the hash rule, one `write()` per record with `O_APPEND`, `sync_now()` and the last hash; session parts, roll-over and crash recovery freeze in step 2.
+  5. `capture.read_batch(max_n)` never waits: it returns the frames already in the ring, up to `max_n`, oldest first.
+  6. `capture.window(start_mono, end_mono)` includes frames at both ends.
+- **Why:** the step 1 contracts are frozen so tests can be written against them; these outputs had names but no fields, and `decode` depended on a type in an unfrozen contract.
+- **Affects:** `docs/modules.md` §1 (`TxRequest`), `capture`, `decode`, `transmit` (input wording only) and `eventlog`. These contracts were not yet frozen, so their versions stay v1. `types.py` gains `TxRequest` and `TX_KINDS`.
+- **Docs updated in the same change:** `docs/modules.md`, `CHANGELOG.md`.
+- **Tests:** `test_SC_6_types_exports_exactly_the_contract_names`, `test_SC_6_shared_type_fields_match_the_contract` (now including `TxRequest`). `CaptureStats`, `DecodeStats` and `DecodeState` are tested with `capture` and `decode` in step 1 PR 2.
+
 ## DC-7 — Example files use the enumerated values; approval kind "inventory"  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1, pull request #2 (item 7, parts b and c)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

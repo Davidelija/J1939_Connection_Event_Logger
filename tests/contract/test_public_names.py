@@ -24,6 +24,7 @@ from j1939logger.types import (
     Name,
     PlatformError,
     Record,
+    TxRequest,
 )
 
 # Field names and order are the contract (docs/modules.md section 1).
@@ -40,13 +41,14 @@ CONTRACT_FIELDS = {
     ClockReading: ["wall_utc", "mono", "source", "valid"],
     Record: ["type", "sev", "utc", "veh_time", "fields", "conn", "event_id"],
     Connection: ["conn", "key", "sa", "name", "start_mono", "last_mono", "category"],
+    TxRequest: ["pgn", "da", "data", "kind"],
 }  # fmt: skip
 
-FROZEN = {Frame, J1939Msg, Name, ClockReading}
+FROZEN = {Frame, J1939Msg, Name, ClockReading, TxRequest}
 
 
 def test_SC_6_types_exports_exactly_the_contract_names() -> None:
-    expected = {"Frame", "J1939Msg", "Name", "ClockReading", "Record", "Connection"}
+    expected = {"Frame", "J1939Msg", "Name", "ClockReading", "Record", "Connection", "TxRequest"}
     expected |= {"PlatformError"}
     enums = {n for n in types.__all__ if n.isupper()}
     assert set(types.__all__) == expected | enums

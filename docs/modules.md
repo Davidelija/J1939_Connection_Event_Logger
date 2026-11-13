@@ -76,6 +76,13 @@ class Connection:         # one external device's connection, owned by detect
     last_mono: float
     category: str         # Category enum in the requirements (vehicle ECU not in baseline, trailer device, external device ...)
 
+@dataclass(frozen=True)
+class TxRequest:          # a frame the logger asks transmit to send (DC-8); only transmit sends
+    pgn: int
+    da: int               # destination address, 255 for global
+    data: bytes
+    kind: str             # "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request"
+
 class PlatformError(Exception):   # the only exception type platform raises
     kind: str             # a value from the Kind column of docs/errors.md (the single list of fault kinds)
 ```
@@ -149,7 +156,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Purpose:** frames in, timestamped records out (rule 6).
 - **Inputs:** `platform.open_can()`; mode changes from `session` (listen-only, normal): `capture` closes the socket and calls `open_can(listen_only=False)` (DC-6).
 - **Rules:** sets the receive buffer from `can.rx_buffer_bytes` (`SO_RCVBUFFORCE`) and reads it back (DC-6); calls `platform.fault("can_recv")` before each receive (DC-5).
-- **Outputs:** `read_batch(max_n) -> list[Frame]`; `window(start_mono, end_mono) -> list[Frame]` for `rawcap`; `stats() -> CaptureStats` (kernel drops from SO\_RXQ\_OVFL, buffer size read back, frames by type).
+- **Outputs:** `read_batch(max_n) -> list[Frame]`, which never waits: it returns the frames already in the ring, up to `max_n`, oldest first (DC-8); `window(start_mono, end_mono) -> list[Frame]` for `rawcap`, including frames at both ends (DC-8); `stats() -> CaptureStats` with `kernel_drops: int` (from SO\_RXQ\_OVFL), `rx_buffer_bytes: int` (size read back) and `frames: dict[str, int]` (counts by type, keys `extended`, `standard`, `remote`, `error`) (DC-8).
 - **Errors:** `PlatformError` from the socket goes to `session`; capture never raises on frame content and never syncs files.
 - **Ring length:** `logging.raw_before_s` + 2 s, so the main loop can catch up after a sync stall without losing the pre-event window.
 - **Performance budget:** frames/s at 100% load at 500 kbit/s with no kernel drops, and µs per frame: to be measured in SC-9 (build step 8) and recorded here.
@@ -158,15 +165,15 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 ### decode  (v1, layer 2) — frozen for step 1
 - **Purpose:** raw frames to J1939 messages.
 - **Inputs:** `list[Frame]`; the logger's current address.
-- **Outputs:** `list[J1939Msg]`; `DecodeStats` (11-bit, remote and error frames by type; TP closes by reason; malformed by reason; ETP transfers seen); `TxRequest`s for Connection Abort when a transfer to the logger is rejected.
-- **State:** open TP sessions, at most `limits.tp_sessions`; ETP is recognized, not reassembled.
+- **Outputs:** `list[J1939Msg]`; `DecodeStats` with `non_j1939: dict[str, int]` (frames by type, keys `standard`, `remote`, `error`), `tp_closed: dict[str, int]` (transport sessions closed, by reason), `malformed: dict[str, int]` (by reason) and `etp_seen: int` (DC-8); `TxRequest`s for Connection Abort when a transfer to the logger is rejected.
+- **State:** a `DecodeState` that only `decode` reads or changes; callers pass it back unchanged (DC-8). It holds the open TP sessions, at most `limits.tp_sessions`; ETP is recognized, not reassembled.
 - **Errors:** never raises on input (SC-12a).
 - **Performance budget:** µs per frame at 100% load: to be measured in SC-9 and recorded here.
 - **Config:** `limits.tp_sessions`. **Requirements:** NP-9, NP-15, IDN-1, DET-10, DET-19, SC-12a. **Test seam:** pure `decode(frames, state) -> (msgs, stats, tx, state)`; property tests with Hypothesis.
 
 ### transmit  (v1, layer 1)
 - **Purpose:** the only path to the bus.
-- **Inputs:** `TxRequest(pgn, da, data, kind)` from `address`, `requests` and `decode`; `kind` is "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request".
+- **Inputs:** `TxRequest(pgn, da, data, kind)` (shared types, §1; DC-8) from `address`, `requests` and `decode`; `kind` is "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request".
 - **Outputs:** frames to `platform`; `TxResult` per request (sent, refused with reason); a `fault` `Record` and `enabled = False` for the rest of the session on any breach or unexpected error; counts for `logger_tx` in `session_end`.
 - **Rules:** allow-list (`transmit.allow_list`, `requests.allow_list`), 10 frames/s, one outstanding request per destination, protocol responses jump the queue; nothing sent before a bit rate is confirmed or while the restart guard holds; calls `platform.fault("can_send")` before each send (DC-5).
 - **Config:** `transmit.*`, `requests.allow_list`. **Requirements:** NP-3, NP-9, NP-16 to NP-19. **Test seam:** a recording socket from `DesktopPlatform`; the A3 witness test on hardware.
@@ -213,6 +220,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Config:** `training.*`. **Requirements:** TRN-2 to TRN-7, TRN-10 to TRN-15. **Test seam:** pure operations on an `Inventory` value (file round-trip tests belong to `store`).
 
 ### eventlog  (v1, layer 1) — frozen for step 1 (append only)
+- **Frozen for step 1 (append only, DC-8):** appending a `Record` (adds `rec`, `written`, `prev` and `hash`; assigns `event_id`), the hash rule in `docs/log-format.md`, one `write()` per record to an `O_APPEND` file, `sync_now()` and the last hash. Session parts, roll-over and rebuilding the last hash after a crash freeze with the rest of `eventlog` in step 2.
 - **Purpose:** append records to the session file and keep the hash chain (session files only).
 - **Inputs:** `Record`s from any layer 3 or 4 module via `session`; `sync_now()` requests; the starting `prev` from `session`.
 - **Outputs:** lines in the session file (adds `written`, `prev`, `hash`, assigns `event_id`); the last hash.
