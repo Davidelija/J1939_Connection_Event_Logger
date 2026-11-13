@@ -145,7 +145,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **State:** vehicle-time offset; never sets the system clock (LOG-16). The kernel sets the system clock from the RTC at boot (`hctosys`, checked in step 2a), so kernel frame timestamps are right from the first frame. The logger checks `rtc_ok()` itself and records `clock_source`; it never waits for the clock.
 - **Config:** `clock.max_skew_min`. **Requirements:** LOG-16. **Test seam:** `FakeClock` with `advance(s)` and `jump(s)`.
 
-### config  (v1, layer 2)
+### config  (v1, layer 2) — frozen for step 2
 - **Purpose:** validate and version the config; also validates the inventory and library files.
 - **Inputs:** a config file (JSON) and the previous active version, loaded by `store`; inventory (`inv-1`) and library (`lib-1`) contents from `store`.
 - **Outputs:** `Config` (typed, read-only) or `ConfigError(reasons)`; `validate_inventory(data) -> Inventory | InventoryError`; `validate_library(data) -> Library | LibraryError`; `config_change` / `config_rejected` `Record` with changed fields and whether the change weakens detection.
@@ -219,7 +219,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Errors:** a corrupt file gives `InventoryError` from validation; `session` then runs untrained (STS-19).
 - **Config:** `training.*`. **Requirements:** TRN-2 to TRN-7, TRN-10 to TRN-15. **Test seam:** pure operations on an `Inventory` value (file round-trip tests belong to `store`).
 
-### eventlog  (v1, layer 1) — frozen for step 1 (append only)
+### eventlog  (v1, layer 1) — frozen for step 1 (append only); frozen for step 2
 - **Frozen for step 1 (append only, DC-8):** appending a `Record` (adds `rec`, `written`, `prev` and `hash`; assigns `event_id`), the hash rule in `docs/log-format.md`, one `write()` per record to an `O_APPEND` file, `sync_now()` and the last hash. Session parts, roll-over and rebuilding the last hash after a crash freeze with the rest of `eventlog` in step 2.
 - **Purpose:** append records to the session file and keep the hash chain (session files only).
 - **Inputs:** `Record`s from any layer 3 or 4 module via `session`; `sync_now()` requests; the starting `prev` from `session`.
@@ -228,7 +228,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Errors:** storage errors become a `fault` `Record` and a fast blink (LOG-22); logging never crashes the logger.
 - **Config:** `logging.*`, `storage.*`. **Requirements:** LOG-3 to LOG-5, LOG-7 to LOG-9, LOG-23. **Test seam:** a temporary directory; `verify_chain` over the result.
 
-### store  (v1, layer 1)
+### store  (v1, layer 1) — frozen for step 2
 - **Purpose:** load and write every supporting file.
 - **Inputs:** `platform.paths()`; contents to write from `session` (status, new inventory and config versions, `state.json`); the free list from `retention`.
 - **Outputs:** `load(kind, version=None) -> bytes | None` for status, inventory, config, library, manufacturer list and state; `write_atomic(kind, name, data)` (temporary file, sync, rename, directory sync); `versions(kind)`; `usage() -> CardUsage`; `free(files)`.
@@ -255,7 +255,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Outputs:** the status file contents (`status-1`), written by `store`; `platform.set_light()` with the priority fast > slow > steady (the layer 3 exception in section 2).
 - **Requirements:** STS-1 to STS-3. **Test seam:** state in, file contents and light pattern out (table-driven).
 
-### session  (v1, layer 4)
+### session  (v1, layer 4) — frozen for step 2
 - **Purpose:** the session lifecycle and the main loop.
 - **Inputs:** wake from `platform`; frames from `capture`; commands from `cmdserver`; the restart guard state; `state.json` from `store` (logger ID, last session number, last hash).
 - **Outputs:** `session_start` and `session_end` `Record`s; session files and parts; calls into every layer 3 module in order; watchdog kicks.
@@ -288,7 +288,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Outputs:** plain-word screens, the one prompt pattern (what will change, reason, y/N), exit codes (LAP-15); retrieved folders made read-only; the last hash per logger; the summary report.
 - **Requirements:** LAP-1 to LAP-15, LAP-17, STS-7, STS-9. **Test seam:** against a local logger on `vcan0` through `j1939cmd`, as in `demo/run_demo.sh`.
 
-### verify_chain  (v1, tool)
+### verify_chain  (v1, tool) — frozen for step 2
 - **Purpose:** check a set of session files.
 - **Inputs:** a folder of session files; optionally the last hash kept by the laptop.
 - **Outputs:** pass, or the first broken or missing record with its line; a replacement card's first record (64 zeros, `session_start` noting "new card") reported as a declared chain break, not a failure; format-version check; a truncated last line reported as truncated, not broken. Exit code 0 on pass.
@@ -350,7 +350,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 | Build step | Contracts frozen before it starts |
 |---|---|
 | 1. Thin slice | `types`, `platform`, `capture`, `decode`, `eventlog` (append only), `clock` — **frozen 2026-11-13** |
-| 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` |
+| 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` — **frozen 2026-11-13** |
 | 2a. Beacon go/no-go | none (no code) |
 | 3. Transmit | `transmit`, `address`, `requests` |
 | 4. Detection | `detect`, `monitor` |
