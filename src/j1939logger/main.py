@@ -15,6 +15,7 @@ import argparse
 import json
 import signal
 import sys
+import traceback
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional
@@ -56,15 +57,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     settings = dict(cfg.values)
     inventory = None
+    inventory_version = None
+    startup_faults = []
     if args.inventory is not None:
-        inventory = inventory_from_file(json.loads(args.inventory.read_text(encoding="utf-8")))
+        try:
+            data = json.loads(args.inventory.read_text(encoding="utf-8"))
+            inventory = inventory_from_file(data)
+            inventory_version = data.get("inventory")
+        except (OSError, ValueError) as exc:
+            # A corrupt inventory runs the logger untrained with a high fault (STS-19).
+            startup_faults.append(f"inventory corrupt ({exc}); running untrained")
     platform = DesktopPlatform(interface=args.interface, root=args.root)
-    session = Session(platform, settings, inventory)
+    versions = {"config": cfg.version, "inventory": inventory_version, "library": None}
+    session = Session(platform, settings, inventory, versions, startup_faults)
     signal.signal(signal.SIGINT, lambda *_: session.stop())
     signal.signal(signal.SIGTERM, lambda *_: session.stop())
-    session.start()
-    print(f"recording to {session.eventlog.path}", flush=True)
-    error = session.run()
+    try:
+        session.start()
+        if session.eventlog is not None:
+            print(f"recording to {session.eventlog.path}", flush=True)
+        error = session.run()
+    except Exception:  # top of the main thread: log, record the cause, exit non-zero
+        session.diag.log("error", "main", traceback.format_exc().replace("\n", " | "))
+        session.diag.restart_cause("software restart")
+        return 1
     if error is not None:
         print(f"stopped: {error}", file=sys.stderr)
         return 1

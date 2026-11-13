@@ -86,27 +86,27 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | IDN-6 | T | 5 |  |  |  |  |  |
 | IDN-7 | T | — | Deferred, not built |  |  |  |  |
 | LOG-1 | I | 2 |  |  |  |  |  |
-| LOG-2 | T | 2 |  |  |  |  |  |
-| LOG-3 | I, T | 2 | `test_LOG_3_*` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2 | 2026-11-13 | CI, PR step-1-logic |
+| LOG-2 | T | 2 | `test_LOG_2_roll_over_continues_rec_and_chain_in_part_2` | vcan | pass: roll-over ends the part with session_end, the next part starts with session_start, rec and the chain continue (DC-10, DC-11) | 2026-11-13 | CI, PR step-2-session |
+| LOG-3 | I, T | 2 | `test_LOG_3_*`, `test_LOG_3_sync_thread_syncs_every_interval` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2; periodic sync thread | 2026-11-13 | CI, PR step-2-session |
 | LOG-4 | I | 1 | `test_LOG_4_*` | vcan | partial: common fields, key order and time formats written by eventlog; veh_time and elapsed-mode utc in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash | 2026-11-13 | CI, PR step-2-store-config |
-| LOG-6 | I | 2 |  |  |  |  |  |
+| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions | 2026-11-13 | CI, PR step-2-session |
+| LOG-6 | I | 2 | `test_LOG_6_session_start_header_has_every_field` | vcan | partial: every header field present; VIN, address and restart guard are placeholders until step 3 (DC-11) | 2026-11-13 | CI, PR step-2-session |
 | LOG-7 | T | 4 |  |  |  |  |  |
 | LOG-8 | I | 7 |  |  |  |  |  |
 | LOG-9 | T | 3 |  |  |  |  |  |
 | LOG-10 | T | 6 | `test_LOG_10_ring_keeps_raw_before_s_plus_2_seconds`, `test_LOG_10_window_includes_both_ends` | vcan | partial: capture ring and window; rawcap in step 6 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-11 | T | 6 |  |  |  |  |  |
-| LOG-12 | T | 2 |  |  |  |  |  |
+| LOG-12 | T | 2 | `test_LOG_12_*` | vcan | pass: clean end and power loss (bytes cut off) recognized at the next start; the summary gap is shown by the laptop in step 7 | 2026-11-13 | CI, PR step-2-session |
 | LOG-13 | I | 2 |  |  |  |  |  |
 | LOG-14 | T | 2 |  |  |  |  |  |
-| LOG-15 | T | 2 | `test_LOG_15_*` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored`, `test_LOG_16_veh_time_is_none_before_time_date_then_whole_seconds`, `test_LOG_16_elapsed_s_counts_from_wake` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps; clock v2 veh_time and elapsed_s (DC-10) | 2026-11-13 | CI, PR step-2-store-config |
-| LOG-17 | T | 2 |  |  |  |  |  |
-| LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session` | vcan | partial: restart cause kept for the next session; the header in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-15 | T | 2 | `test_LOG_15_*`, `test_LOG_15_header_and_end_carry_buffer_size_and_kernel_drops` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2; session_start buffer size and session_end kernel drops | 2026-11-13 | CI, PR step-2-session |
+| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored`, `test_LOG_16_veh_time_is_none_before_time_date_then_whole_seconds`, `test_LOG_16_elapsed_s_counts_from_wake`, `test_LOG_16_without_valid_time_file_is_noclock_and_records_carry_elapsed_s` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps; clock v2 veh_time and elapsed_s (DC-10); no-clock session files and elapsed_s | 2026-11-13 | CI, PR step-2-session |
+| LOG-17 | T | 2 | `test_LOG_17_key_off_after_30_s_silence_then_new_session_on_next_frame` | vcan | partial: session ends after 30 s silence and the next frame opens a new session; open connections end with key-off in step 4 | 2026-11-13 | CI, PR step-2-session |
+| LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session`, `test_LOG_18_software_restart_cause_from_the_diagnostic_log` | vcan | partial: restart cause kept for the next session; the header in PR 2; next header records software restart | 2026-11-13 | CI, PR step-2-session |
 | LOG-19 | T, I | 2 | `test_LOG_19_unknown_formats_are_refused` | vcan | partial: config, inventory and library refuse unknown formats; verifier in PR 3 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-20 | T | 2 | `test_LOG_20_*` | vcan | partial: diagnostic log format, repeat counting, rotation; session logging into it in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-21 | T | — | Deferred, not built |  |  |  |  |
-| LOG-22 | T | 6 | `test_LOG_22_*`, `test_LOG_22_card_write_error_gives_high_fault_and_keeps_old_file` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6; store storage faults | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-22 | T | 6 | `test_LOG_22_*`, `test_LOG_22_card_write_error_gives_high_fault_and_keeps_old_file`, `test_LOG_22_storage_fault_is_logged_after_the_card_returns` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6; store storage faults; session logs storage faults once the card returns | 2026-11-13 | CI, PR step-2-session |
 | LOG-23 | T | 2 | `test_LOG_23_*` | vcan | partial: store writes atomically (temporary file, sync, rename, directory sync), never overwrites versions, ignores leftover temporary files; status file written by session in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-24 | T | — | Deferred, not built |  |  |  |  |
 | STS-1 | D | 8 | `test_STS_1_set_light_*` | vcan | partial: desktop `set_light()` patterns only; light priority in step 7, A8 in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
@@ -125,8 +125,8 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-15 | T | — | Deferred, not built |  |  |  |  |
 | STS-16 | T | — | Deferred, not built |  |  |  |  |
 | STS-17 | T | 7 |  |  |  |  |  |
-| STS-18 | T | 2 | `test_STS_18_watchdog_kicks_are_counted` | vcan | partial: desktop `watchdog_kick()` only; hang detection in step 2 | 2026-11-13 | CI, PR step-1-interfaces |
-| STS-19 | T | 2 | `test_STS_19_*` | vcan | partial: corrupt config and inventory detected; start-up self-check in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
+| STS-18 | T | 2 | `test_STS_18_watchdog_kicks_are_counted`, `test_STS_18_watchdog_is_kicked_on_every_loop` | vcan | partial: desktop `watchdog_kick()` only; hang detection in step 2; main loop kicks the watchdog | 2026-11-13 | CI, PR step-2-session |
+| STS-19 | T | 2 | `test_STS_19_*`, `test_STS_19_corrupt_inventory_runs_untrained_with_high_fault` | vcan | partial: corrupt config and inventory detected; start-up self-check in PR 2; corrupt inventory runs untrained with a high fault | 2026-11-13 | CI, PR step-2-session |
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
 | STS-22 | T | — | Deferred, not built |  |  |  |  |

@@ -10,6 +10,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 1. Thin slice |  |  |  |  |
 | 2. Sessions and chain, freeze |  |  | To check: the contracts marked "frozen for step 2" in `docs/modules.md` and the gaps listed in the freeze pull request; `docs/module-map.md` |  |
 | 2. Sessions and chain, PR 1 |  |  | To check: `config` (safety-critical: allow-list rule, `RELEASE_*_ALLOW`), `store` (atomic writes, never overwriting versions, frees raw captures only), `clock` v2, the diagnostic log |  |
+| 2. Sessions and chain, PR 2 |  |  | To check: `eventlog` (safety-critical: hashing unchanged; sync thread, parts, `scan_tail`), `session` (numbering, previous end, key-off, roll-over), DC-11 |  |
 | 2. Sessions and chain |  |  |  |  |
 | 2a. Beacon go/no-go |  |  |  |  |
 | 3. Transmit |  |  |  |  |

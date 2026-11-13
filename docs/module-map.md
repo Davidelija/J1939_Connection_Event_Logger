@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-13, step 2 PR 1 (`config`, `store`, `clock` v2, diagnostic log).
+Last updated: 2026-11-13, step 2 PR 2 (full `eventlog`, `session` lifecycle).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -26,7 +26,7 @@ flowchart TB
     decode["decode ✅"]; config["config ✅"]
   end
   subgraph L1["1 · Services"]
-    capture["capture ✅"]; clock["clock ✅"]; eventlog["eventlog 🟡"]; transmit["transmit ⬜"]; store["store ✅"]; rawcap["rawcap ⬜"]
+    capture["capture ✅"]; clock["clock ✅"]; eventlog["eventlog ✅"]; transmit["transmit ⬜"]; store["store ✅"]; rawcap["rawcap ⬜"]
   end
   subgraph L0["0 · Hardware"]
     interface["platform/interface ✅"]; desktop["platform/desktop ✅"]; beacon["platform/beacon ⬜"]
@@ -45,7 +45,7 @@ flowchart TB
 | `platform/beacon.py` | 0 | The DG Beacon implementation of the same interface. | 8 | ⬜ |
 | `capture.py` | 1 | The only CAN receiver: a thread that reads frames with kernel timestamps into a queue and a 12 s ring, and counts frames and kernel drops. | 1 | ✅ |
 | `clock.py` | 1 | The only source of time: real-time clock, else vehicle time as an offset, else time since wake; turns frame times into record times, vehicle times and seconds since wake (v2); logs the first vehicle time and clock skew. | 1–2 | ✅ |
-| `eventlog.py` | 1 | The only writer of session files: appends records with the SHA-256 hash chain, one write per record, and syncs. Parts, roll-over and crash recovery come in step 2. | 1–2 | 🟡 |
+| `eventlog.py` | 1 | The only writer of session files: appends records with the SHA-256 hash chain, one write per record; syncs every 2 s on its own thread and at once after a new device; continues the chain into new parts; writes seconds since wake when there is no valid time; reads the last complete record after a crash. | 1–2 | ✅ |
 | `transmit.py` | 1 | The only path to the bus: allow-list, 10 frames/s cap, one request per destination; turns transmit off on any breach. | 3 | ⬜ |
 | `store.py` | 1 | The only writer of supporting files (status, inventory, config, library, `state.json` on internal flash): loading the newest or a given version, atomic writes, card space, freeing raw captures only. | 2 | ✅ |
 | `rawcap.py` | 1 | Saves raw candump files from 10 s before to 60 s after each new connection or control flag, from capture's ring. | 6 | ⬜ |
@@ -59,7 +59,7 @@ flowchart TB
 | `inventory.py` | 3 | The known-good devices: training, approvals, removals, versions. | 6 | ⬜ |
 | `retention.py` | 3 | Keeps the card from filling: decides which raw captures may be freed; never session files. | 6 | ⬜ |
 | `status.py` | 3 | The status file and the one status light (fast blink beats slow blink beats steady). | 7 | ⬜ |
-| `session.py` | 4 | The session lifecycle and main loop. Now: runs capture, decode, clock, detect and eventlog and syncs after a new device. Header, end record, parts, `state.json`, self-check, watchdog and restart guard come in step 2. | 1–2 | 🟡 |
+| `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks. Restart guard and transmit come in step 3. | 1–3 | 🟡 |
 | `admin.py` | 4 | The diagnostic log (built: one line per event, repeats counted, rotated, restart causes for the next session) and, in step 7, restart and retrain. | 2, 7 | 🟡 |
 | `main.py` | 5 | Service entry point. Now: reads and validates the config and inventory files and runs a session on the desktop platform. Later: the command socket (`cmdserver`). | 1, 7 | 🟡 |
 | `j1939cmd.py` | 5 | The logger-side program each laptop command runs over SSH; passes the request to the service over a Unix socket. | 7 | ⬜ |
