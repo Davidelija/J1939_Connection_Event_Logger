@@ -1,4 +1,4 @@
-"""clock: the one source of time and its validity (docs/modules.md section 4, contract v1).
+"""clock: the one source of time and its validity (docs/modules.md section 4, contract v2).
 
 Layer 1. Reads time only from the platform (CLAUDE.md rule 14) and never sets
 the system clock (LOG-16).
@@ -9,6 +9,10 @@ the system clock (LOG-16).
   real-time clock is valid (log-format ``clock_valid``).
 * ``to_utc(ts_mono)``: the only way any module turns a frame or event time
   into a record's ``utc``. None while the source is ``elapsed``.
+* ``veh_time(ts_mono)``: vehicle time for an event from the Time/Date
+  offset, whole seconds; None before the first reply (v2, DC-10).
+* ``elapsed_s(ts_mono)``: seconds since wake, to the millisecond; records
+  carry it while the source is ``elapsed`` (DC-10).
 * ``on_time_date(msg)``: a vehicle Time/Date (PGN 65254) message. The first
   one yields a ``time_sync`` record; a reply more than ``clock.max_skew_min``
   from a valid real-time clock yields a notice ``fault`` and the real-time
@@ -54,8 +58,12 @@ def parse_time_date(data: bytes) -> Optional[datetime]:
 class Clock:
     """Time for the logger: real-time clock, vehicle offset, or time since wake."""
 
-    def __init__(self, platform: Platform, max_skew_min: float) -> None:
+    def __init__(
+        self, platform: Platform, max_skew_min: float, wake_mono: Optional[float] = None
+    ) -> None:
+        """``wake_mono`` is the monotonic time of wake; it defaults to now."""
         self._platform = platform
+        self._wake_mono = platform.now().mono if wake_mono is None else wake_mono
         self._max_skew_s = max_skew_min * 60.0
         self._vehicle_offset: Optional[float] = None  # vehicle UTC seconds minus mono
         self._synced = False
@@ -79,6 +87,16 @@ class Clock:
         if r.wall_utc is None:
             return None
         return r.wall_utc - timedelta(seconds=r.mono - ts_mono)
+
+    def veh_time(self, ts_mono: float) -> Optional[datetime]:
+        """Vehicle time for an event, whole seconds; None before the first Time/Date reply."""
+        if self._vehicle_offset is None:
+            return None
+        return _epoch(ts_mono + self._vehicle_offset).replace(microsecond=0)
+
+    def elapsed_s(self, ts_mono: float) -> float:
+        """Seconds since wake, to the millisecond (records without a valid time, DC-10)."""
+        return round(ts_mono - self._wake_mono, 3)
 
     # -- vehicle time ---------------------------------------------------------
 
