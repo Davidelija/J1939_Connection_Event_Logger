@@ -31,6 +31,25 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-10 — Step 2 freeze: time without a clock, vehicle time, state.json, parts, previous-session end, diagnostic log  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, step 2 freeze pull request #5 (gaps 1 to 10)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. With no valid time (`clock_source` `elapsed`), records have null `utc` and `written` and carry `elapsed_s` (seconds since wake, milliseconds); the session file is named `s<NNNNNN>_noclock.jsonl` when no valid time exists at session start.
+  2. `clock` v2 adds `veh_time(ts_mono)` (vehicle time from the Time/Date offset, whole seconds, None before the first reply) and `elapsed_s(ts_mono)`.
+  3. `session` writes `session_end.frames_not_j1939` with the log-format keys, mapping `DecodeStats.non_j1939["standard"]` to `std_11bit`.
+  4. `state.json` layout `state-1`: `format`, `logger_id` (the logger NAME), `session` (last session number), `last_hash`.
+  5. The manufacturer list is part of the device library file (IDN-2); `store` has no separate kind for it.
+  6. The diagnostic log (LOG-20) is written by a minimal `admin` built in step 2 (`diag/logger.log`, rotated by `diag.max_bytes` and `diag.files`); the rest of `admin` comes in step 7.
+  7. Previous session end: clean if the newest session file ends with `session_end`; otherwise the diagnostic log's last restart cause (software restart, watchdog restart); otherwise power loss, with the bytes cut off equal to any incomplete last line.
+  8. After a crash the last complete line of the newest session file gives the last hash and wins over `state.json`; `state.json` is used only in the LOG-5 cases without session files.
+  9. Roll-over: the closing part ends with `session_end` (reason "session roll-over"); the next part (`_p2.jsonl`, ...) starts with a repeated `session_start` with the same session number and `part` + 1; the chain continues.
+  10. After key-off the logger waits listen-only and starts a new session (wake cause "CAN activity") on the next frame (sleep stays deferred, HW-5).
+- **Why:** gaps found while freezing the step 2 contracts (pull request #5).
+- **Affects:** `docs/log-format.md` (`utc`, `elapsed_s`, file names, parts, `state.json`; format history: `state-1` added, `log-1` unchanged as no release has shipped); `docs/modules.md` (`clock` v1 to v2; wording in `eventlog`, `store`, `session`, `admin` and §2); `docs/handoff.md` (step 2 scope).
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** written with the step 2 code: `test_LOG_16_*` (elapsed mode, `veh_time`), `test_LOG_5_*` (`state.json`, crash recovery), `test_LOG_2_*` (parts), `test_LOG_12_*` and `test_LOG_18_*` (previous end), `test_LOG_20_*` (diagnostic log), `test_LOG_17_*` (key-off and next session).
+
 ## DC-9 — Step 1 runs the pipeline with a minimal session, a wake-timing category and the config file read directly  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1 PR 2 (branch `step-1-logic`)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
