@@ -25,10 +25,15 @@ jobs:
 
       - name: Load vcan and bring up vcan0
         run: |
-          sudo apt-get update
-          # GitHub's Ubuntu runners ship vcan in linux-modules-extra.
-          sudo apt-get install -y "linux-modules-extra-$(uname -r)" can-utils
-          sudo modprobe vcan
+          set -x
+          uname -r
+          if ! sudo modprobe vcan; then
+            # GitHub's Ubuntu runners ship vcan in linux-modules-extra for the running kernel.
+            sudo apt-get update -q
+            apt-cache policy "linux-modules-extra-$(uname -r)"
+            sudo apt-get install -y -q "linux-modules-extra-$(uname -r)"
+            sudo modprobe vcan
+          fi
           sudo ip link add dev vcan0 type vcan
           sudo ip link set up vcan0
           ip -details link show vcan0
