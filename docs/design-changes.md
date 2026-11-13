@@ -31,6 +31,48 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-7 — Example files use the enumerated values; approval kind "inventory"  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2 (item 7, parts b and c)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  - (b) Record fields that take an Enumerated value hold exactly that value; detail goes in its own field. In the session 142 example: the Component ID request outcome "no reply after 1 retry" becomes "no reply" (NP-14 already means one retry); `classification_rule` "wake timing (first claim 29 min after the session's first frame)" becomes "wake timing", with the detail in a new `classification_detail` field on `connection_start`; `id_source` becomes a list of Identification source values, `["NAME", "request pattern"]` (the function code and library version are already in the record's NAME fields and the session header). In `inv-v2.json` an approved PGN's `kind` "sent" becomes "PGN sent". The session file's hash chain is recomputed from record 5, and the `retrieval` record's `last_hash` follows it.
+  - (c) The requirements' Approval kind enum gains "inventory" (confirming a trained inventory), which `docs/log-format.md` already lists for the `approval` record.
+- **Why:** the example is the worked reference for every record; values that differ from the enums would be copied into code and tests. A confirmed training needs an approval kind.
+- **Affects:** `docs/requirements.md` (Enumerated values: Identification source, Approval kind); `docs/log-format.md` (`connection_start` gains `classification_detail`; `identification` `id_source` is a list); `types.py` (`APPROVAL_KINDS`); `docs/examples/s000142_20261106T140211Z.jsonl`, `docs/examples/inv-v2.json`. No release has shipped, so the formats stay `log-1` and `inv-1` (as X16, X28, X42).
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** `test_LOG_5_example_session_142_hash_chain_verifies`, `test_LOG_5_example_retrieval_last_hash_is_the_chain_before_it`, `test_IDN_6_example_values_use_the_requirements_enumerations`, `test_TRN_13_example_inventory_approval_kinds_use_the_enumeration`.
+
+## DC-6 — Step 1 interface clarifications  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2 ("[step 1 | interfaces] ...")
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** ten points the step 1 interface code exposed, each settled as follows:
+  1. `Paths(card, flash, keys)` is defined in `platform/interface.py`, not in the shared types.
+  2. Platform `now()` reports `rtc`, or `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset.
+  3. `capture` sets the CAN receive buffer (`SO_RCVBUFFORCE`, `can.rx_buffer_bytes`) and reads it back; `open_can()` does not.
+  4. Switching from listen-only to normal mode (NP-2): `capture` closes the socket and calls `open_can(listen_only=False)`. No new platform function. Any receive gap is measured in step 3.
+  5. Dev tools are pinned by version in `pyproject.toml` and by hash in `requirements/dev.txt`.
+  6. Enumerated values: a note in parentheses that names a config key, a synonym or a scope is not part of the value ("silence", "power loss", "needs training", "NAME"); the Category values keep their parentheses.
+  7. `types.py` writes optional fields as `Optional[X]` (DC-1), because the shared types are evaluated at run time.
+  8. Tests of project tooling start with the DC ID that defines the tool (`test_DC_2_...`) instead of a requirement ID.
+  9. SC-2 stays at step 3; the step 1 `capture` test covers the reading side early.
+  10. A bad argument to a platform function (an unknown light pattern or `fault()` operation) is a programming error and raises `ValueError`, not `PlatformError`.
+- **Why:** gaps and disagreements between the specs found while writing the interface code (pull request #2, items 2 to 11).
+- **Affects:** platform contract (wording only; the version change is DC-5); `capture` contract (buffer and mode change; wording, no version change); enumerations in `types.py`.
+- **Docs updated in the same change:** `docs/modules.md` (§1, §4 platform and capture), `docs/porting.md` §3, `docs/requirements.md` (Enumerated values), `docs/test-plan.md` §2, §3 and §10, `docs/handoff.md` (Testing: Naming; Ground rules 3), `CLAUDE.md` rule 3.
+- **Not decided here:** the session 142 example's spellings and approval kind "inventory"; both decided in DC-7.
+- **Tests:** `test_SC_6_*` contract tests; `test_STS_1_set_light_rejects_unknown_pattern`; `test_PLT_2_fault_rejects_unknown_operation`; `test_DC_2_*`.
+
+## DC-5 — Platform `fault(op)` for socket and storage fault injection  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2, as the question DC-new-20261113-fault-delivery
+- **Decided by:** Vaughan Lynn, 2026-11-13 (option B; chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** the platform contract goes from v1 to v2 with a ninth function, `fault(op: str) -> None`. Layer 1 modules call it just before each operation in `FAULT_OPS`: `can_recv` (`capture`), `can_send` (`transmit`), `card_write` (`eventlog`, `store`, `rawcap`), `card_sync` (`eventlog`, `store`) and `flash_write` (`store`). `DesktopPlatform` raises `PlatformError(kind)` while a planned fault is active for that operation: `can_down` (`can_recv`, `can_send`), `enobufs` (`can_send`), `enospc`, `erofs` (`card_write`), `eio`, `card_removed` (`card_write`, `card_sync`), `state_unwritable` (`flash_write`); `slow_sync` delays `card_sync` by `args["s"]` seconds instead of raising. `args["ops"]` narrows a kind to some of its operations. Hardware implementations do nothing in `fault()`.
+  Fault-plan semantics (all kinds the plan delivers): a fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run; `clock_jump` steps wall time by `args["s"]` when monotonic time reaches `at_mono`. The plan also delivers `can_missing` (`open_can()`), `no_bitrate` (`bitrate_check()` returns None) and `rtc_invalid` (`rtc_ok()` False, `now()` source `elapsed`).
+- **Why:** the fault plan must inject the socket and storage errors in `docs/errors.md`, which are detected in modules that otherwise never call the platform. Of the options raised (A: route all I/O through the platform; B: one `fault(op)` hook; C: inject by harness and traffic only), B keeps the platform small and leaves real I/O in the layer 1 modules.
+- **Not covered:** the other 35 kinds (bus traffic such as `bus_off`, `bad_frame`, `tp_error`, `claim_change`; file contents such as `truncated_line`, `corrupt_file`, `state_corrupt`; service events `exception`, `hang`, `restart_loop`; `rx_overflow`; vehicle time; `card_nearly_full`; and the command, laptop and install kinds). A plan naming one of them raises `NotImplementedError`. How each is injected (traffic, harness or test setup) is still to be decided, kind by kind, as its build step lands.
+- **Affects:** platform contract v1 to v2 (`docs/modules.md` §4); `capture`, `transmit`, `eventlog`, `store` and `rawcap` call `platform.fault()` (a rule in each contract; their inputs, outputs and errors are unchanged, so their versions stay v1); `docs/modules.md` §5 (injection points); `docs/test-plan.md` §3 and §4; `docs/porting.md` §3.
+- **Docs updated in the same change:** `docs/modules.md`, `docs/porting.md`, `docs/test-plan.md`.
+- **Tests:** `test_PLT_2_fault_op_raises_each_planned_kind_on_its_operations`, `test_LOG_22_card_removed_fault_window_ends_after_for_s`, `test_LOG_22_fault_ops_arg_narrows_the_operations`, `test_LOG_3_slow_sync_fault_delays_card_sync_by_s`, `test_LOG_5_state_unwritable_fault_hits_flash_only`, `test_PLT_2_fault_plan_refuses_kinds_without_a_delivery_path`, `test_SC_6_platform_protocol_has_exactly_the_nine_functions`.
+
 ## DC-4 — Ownership of the test harness, component and replay tests and bench procedures  (accepted, 2026-11-09)
 - **Raised by:** Claude, test plan review (test plan v2)
 - **Decided by:** Vaughan Lynn, 2026-11-09

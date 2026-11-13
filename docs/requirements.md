@@ -319,18 +319,18 @@ Defaults are those in `cfg-v3`. Each parameter lives in the versioned config fil
 | --- | --- |
 | Severity | info, notice, high |
 | Category | vehicle ECU in baseline, vehicle ECU not in baseline, trailer device, external device (approved), external device (unrecognized) |
-| Connection end reason | silence (detection.silence\_end\_s), key-off, power loss (recorded at next start-up), software restart, watchdog restart, session roll-over |
-| Logger state | starting, detecting bit rate, recording, training, needs training (untrained), fault; new device shown as a separate indicator |
+| Connection end reason | silence, key-off, power loss, software restart, watchdog restart, session roll-over. Silence is after detection.silence\_end\_s; power loss is recorded at the next start-up |
+| Logger state | starting, detecting bit rate, recording, training, needs training, fault; needs training is untrained mode; new device shown as a separate indicator |
 | Request outcome | reply, NACK, no reply |
-| Identification source | NAME, self-reported reply, request pattern, or a combination |
+| Identification source | NAME, self-reported reply, request pattern; a record lists every source used |
 | Confidence | high, medium, low |
 | Clock source | rtc, vehicle, elapsed |
 | Make source | self-reported, manufacturer code, library, none |
-| Classification rule | in inventory, wake timing, request activity, NAME (analysis only) |
+| Classification rule | in inventory, wake timing, request activity, NAME. NAME is used in analysis only |
 | VIN status | match, mismatch, unavailable |
 | Previous session end | clean, power loss, software restart, watchdog restart, software update |
 | Reset mode | restart, retrain, move, wipe |
-| Approval kind | device, PGN sent, PGN requested, address; removals use remove device, remove PGN sent, remove PGN requested |
+| Approval kind | inventory, device, PGN sent, PGN requested, address; removals use remove device, remove PGN sent, remove PGN requested |
 | Role | operator, admin |
 
 ## Not required (out of scope)

@@ -11,7 +11,7 @@ Design guidance for each module: what it is for, what goes in and comes out, wha
 
 Defined once, in build step 1, and imported everywhere. Tests build fixtures from these.
 
-**Python 3.9 (DC-1):** `types.py` starts with `from __future__ import annotations`, so the `X | None` annotations below work on 3.9. Never use `X | None` in code evaluated at run time (`isinstance` checks, casts, `typing.get_type_hints`); use `Optional[X]` there.
+**Python 3.9 (DC-1, DC-6):** `types.py` starts with `from __future__ import annotations` and writes optional fields as `Optional[X]`, because the shared types are evaluated at run time (`typing.get_type_hints`, Hypothesis strategies). Never use `X | None` in code evaluated at run time (`isinstance` checks, casts, `typing.get_type_hints`).
 
 ```python
 from __future__ import annotations
@@ -50,7 +50,7 @@ class Name:               # the 64-bit NAME and its decoded fields (raw numbers,
 
 @dataclass(frozen=True)
 class ClockReading:
-    wall_utc: datetime | None   # None when no valid source
+    wall_utc: Optional[datetime]   # None when no valid source
     mono: float
     source: str                 # "rtc" | "vehicle" | "elapsed" (requirements enum)
     valid: bool
@@ -59,11 +59,11 @@ class ClockReading:
 class Record:             # a log record before eventlog adds written, prev and hash
     type: str             # record type from docs/log-format.md
     sev: str              # "info" | "notice" | "high"
-    utc: datetime | None  # event time
-    veh_time: datetime | None
+    utc: Optional[datetime]  # event time
+    veh_time: Optional[datetime]
     fields: dict          # the type-specific fields, exactly as in docs/log-format.md
-    conn: int | None = None
-    event_id: str | None = None   # "<session>-<n>", assigned by eventlog for events
+    conn: Optional[int] = None
+    event_id: Optional[str] = None   # "<session>-<n>", assigned by eventlog for events
 # eventlog adds rec, written, prev and hash, and assigns event_id. Every utc comes from clock.to_utc(ts_mono), never from Frame.ts_kernel directly (X27).
 
 @dataclass
@@ -71,7 +71,7 @@ class Connection:         # one external device's connection, owned by detect
     conn: int
     key: tuple            # ("name", value) or ("sa", address) for a device that never claims
     sa: int
-    name: Name | None
+    name: Optional[Name]
     start_mono: float
     last_mono: float
     category: str         # Category enum in the requirements (vehicle ECU not in baseline, trailer device, external device ...)
@@ -122,12 +122,13 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 
 ## 4. Module contracts
 
-### platform  (v1, layer 0)
+### platform  (v2, layer 0)
 - **Purpose:** the hardware boundary. Desktop (`vcan0`) and Beacon implementations; tests use the desktop one with a fault plan.
-- **Interface:** `open_can(listen_only: bool) -> socket`; `bitrate_check() -> int | None`; `set_light(pattern: str)` ("steady" | "slow" | "fast" | "off"); `now() -> ClockReading`; `rtc_ok() -> bool`; `on_wake() -> (wake_mono, ready_mono)`; `watchdog_kick()`; `paths() -> Paths` (card, flash, keys).
+- **Interface:** `open_can(listen_only: bool) -> socket`; `bitrate_check() -> int | None`; `set_light(pattern: str)` ("steady" | "slow" | "fast" | "off"); `now() -> ClockReading`; `rtc_ok() -> bool`; `on_wake() -> (wake_mono, ready_mono)`; `watchdog_kick()`; `paths() -> Paths` (card, flash, keys; `Paths` is defined in `platform/interface.py`, DC-6); `fault(op: str)` (v2, DC-5), called by layer 1 modules just before each operation in `FAULT_OPS` (`can_recv`, `can_send`, `card_write`, `card_sync`, `flash_write`); it raises a planned fault on the desktop and does nothing on hardware.
+- **Time:** `now()` reports `rtc` when the real-time clock is valid, otherwise `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset (DC-6).
 - **CAN input:** raw SocketCAN by default; `python-can` only as an optional extra inside this layer (X22).
-- **Errors:** raises only `PlatformError` with a `kind` from `docs/errors.md`.
-- **Test seam:** `DesktopPlatform(fault_plan=[(at_mono, kind, args), ...], clock=FakeClock())` injects every error in `docs/errors.md` and controls time.
+- **Errors:** raises only `PlatformError` with a `kind` from `docs/errors.md`; a bad argument (an unknown light pattern or operation) is a programming error and raises `ValueError` (DC-6).
+- **Test seam:** `DesktopPlatform(fault_plan=[(at_mono, kind, args), ...], clock=FakeClock())` controls time and injects the platform's faults (DC-5): `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `fault(op)` `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync`. A fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run. Other kinds are injected by traffic, the harness or test setup (DC-5).
 - **Requirements:** PLT-1 to PLT-8, HW-7, HW-8, STS-1, STS-18. **Not responsible for:** any J1939 logic.
 
 ### clock  (v1, layer 1)
@@ -146,7 +147,8 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 
 ### capture  (v1, layer 1)
 - **Purpose:** frames in, timestamped records out (rule 6).
-- **Inputs:** `platform.open_can()`; mode changes from `session` (listen-only, normal).
+- **Inputs:** `platform.open_can()`; mode changes from `session` (listen-only, normal): `capture` closes the socket and calls `open_can(listen_only=False)` (DC-6).
+- **Rules:** sets the receive buffer from `can.rx_buffer_bytes` (`SO_RCVBUFFORCE`) and reads it back (DC-6); calls `platform.fault("can_recv")` before each receive (DC-5).
 - **Outputs:** `read_batch(max_n) -> list[Frame]`; `window(start_mono, end_mono) -> list[Frame]` for `rawcap`; `stats() -> CaptureStats` (kernel drops from SO\_RXQ\_OVFL, buffer size read back, frames by type).
 - **Errors:** `PlatformError` from the socket goes to `session`; capture never raises on frame content and never syncs files.
 - **Ring length:** `logging.raw_before_s` + 2 s, so the main loop can catch up after a sync stall without losing the pre-event window.
@@ -166,7 +168,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Purpose:** the only path to the bus.
 - **Inputs:** `TxRequest(pgn, da, data, kind)` from `address`, `requests` and `decode`; `kind` is "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request".
 - **Outputs:** frames to `platform`; `TxResult` per request (sent, refused with reason); a `fault` `Record` and `enabled = False` for the rest of the session on any breach or unexpected error; counts for `logger_tx` in `session_end`.
-- **Rules:** allow-list (`transmit.allow_list`, `requests.allow_list`), 10 frames/s, one outstanding request per destination, protocol responses jump the queue; nothing sent before a bit rate is confirmed or while the restart guard holds.
+- **Rules:** allow-list (`transmit.allow_list`, `requests.allow_list`), 10 frames/s, one outstanding request per destination, protocol responses jump the queue; nothing sent before a bit rate is confirmed or while the restart guard holds; calls `platform.fault("can_send")` before each send (DC-5).
 - **Config:** `transmit.*`, `requests.allow_list`. **Requirements:** NP-3, NP-9, NP-16 to NP-19. **Test seam:** a recording socket from `DesktopPlatform`; the A3 witness test on hardware.
 
 ### address  (v1, layer 3)
@@ -214,7 +216,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Purpose:** append records to the session file and keep the hash chain (session files only).
 - **Inputs:** `Record`s from any layer 3 or 4 module via `session`; `sync_now()` requests; the starting `prev` from `session`.
 - **Outputs:** lines in the session file (adds `written`, `prev`, `hash`, assigns `event_id`); the last hash.
-- **Rules:** one `write()` per record to an `O_APPEND` file; directory synced after each rename; sync on its own thread; after a crash, the last hash is rebuilt from the last complete line of the newest session file.
+- **Rules:** one `write()` per record to an `O_APPEND` file; directory synced after each rename; sync on its own thread; after a crash, the last hash is rebuilt from the last complete line of the newest session file; calls `platform.fault("card_write")` and `platform.fault("card_sync")` before each write and sync (DC-5).
 - **Errors:** storage errors become a `fault` `Record` and a fast blink (LOG-22); logging never crashes the logger.
 - **Config:** `logging.*`, `storage.*`. **Requirements:** LOG-3 to LOG-5, LOG-7 to LOG-9, LOG-23. **Test seam:** a temporary directory; `verify_chain` over the result.
 
@@ -222,7 +224,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Purpose:** load and write every supporting file.
 - **Inputs:** `platform.paths()`; contents to write from `session` (status, new inventory and config versions, `state.json`); the free list from `retention`.
 - **Outputs:** `load(kind, version=None) -> bytes | None` for status, inventory, config, library, manufacturer list and state; `write_atomic(kind, name, data)` (temporary file, sync, rename, directory sync); `versions(kind)`; `usage() -> CardUsage`; `free(files)`.
-- **Rules:** the only writer of supporting files; never writes session files or raw captures; frees only what `retention` lists; `state.json` is on internal flash, everything else on the card.
+- **Rules:** the only writer of supporting files; never writes session files or raw captures; frees only what `retention` lists; `state.json` is on internal flash, everything else on the card; calls `platform.fault()` before each write and sync (`card_write`, `card_sync`, `flash_write`, DC-5).
 - **Errors:** storage errors become a `fault` `Record` (LOG-22); a missing file loads as None; leftover temporary files are ignored (LOG-23).
 - **Config:** `storage.*`. **Requirements:** LOG-5 (state file), LOG-13, LOG-23, TRN-6, STS-3. **Test seam:** a temporary directory; file round-trip tests; write errors from the fault plan.
 
@@ -230,6 +232,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Purpose:** raw candump windows around events.
 - **Inputs:** triggers (connection start, control flag) with `conn`, `event_id` and `ts_mono`; `capture.window()`.
 - **Outputs:** `s<session>_c<conn>_e<event>.log` covering −`logging.raw_before_s` to +`logging.raw_after_s`; the file name for the record's `raw_capture` field.
+- **Rules:** calls `platform.fault("card_write")` before each write (DC-5).
 - **Config:** `logging.raw_before_s`, `logging.raw_after_s`, `limits.raw_mb_per_session`. **Requirements:** LOG-10. **Test seam:** check every window contains its record's `utc`.
 
 ### retention  (v1, layer 3)
@@ -325,14 +328,14 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 
 **Injection points** (the only ways a test reaches inside):
 - Time: `FakeClock` (`advance`, `jump`), passed to `platform` and `clock`.
-- Faults: the `DesktopPlatform` fault plan, using the kinds in the Kind column of `docs/errors.md`.
+- Faults: the `DesktopPlatform` fault plan, using the kinds in the Kind column of `docs/errors.md`; socket and storage errors reach the modules through `platform.fault(op)` (DC-5). Kinds the plan does not deliver are injected by traffic, the harness or test setup.
 - Commands: the `cmdserver` socket, or `j1939cmd` at level 3.
 
 **Who owns what:** test-script writers own `tests/fixtures/`, the fixture manifests, `tools/fixtures/` (including `scenario.py`, which writes each fixture folder and its findings ground-truth file, `docs/findings-data/scenarios/<scenario>.json`, from one description), `tests/harness/`, `tests/component/` (level 2, including its fixture runner), `tests/replay/` (level 3), the `bench/` procedures and `bench/checklists.md`, and `tools/findings/`; developers own `src/`, the unit tests and the contract tests (`tests/contract/`). Either side changes the other's area only through a DC entry (DC-4).
 
 **Contract tests:** mypy checks each implementation against its `Protocol` (for example `platform/interface.py`), and one test per module imports only the public names in section 4, so a hidden dependency fails CI.
 
-**Naming:** every test name starts with the requirement ID it verifies (`test_DET_4_copied_name_raises_conflict`). A fixture's `requirements` list ties it to the verification matrix.
+**Naming:** every test name starts with the requirement ID it verifies (`test_DET_4_copied_name_raises_conflict`); tests of project tooling start with the DC ID that defines the tool (`test_DC_2_...`, DC-6). A fixture's `requirements` list ties it to the verification matrix.
 
 ## 6. Contract freeze by build step
 
