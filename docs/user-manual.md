@@ -33,7 +33,7 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 1. Get the repository and change into its folder.
 2. Run `bash demo/run_demo.sh`.
 
-The demo brings up a virtual CAN interface (`vcan0`), starts the logger listening only, replays a recorded capture in which a scan tool joins the bus, stops the logger, checks the hash chain and lists the records written. It ends with:
+The demo brings up a virtual CAN interface (`vcan0`), starts the logger listening only, replays a recorded capture in which a scan tool joins the bus, stops the logger, checks the hash chain and lists the records written. It ends with lines like these (example; the hash and record count differ from run to run; real output will replace this in step 9):
 
 ```
 chain verifies: 1 files, 4 records, last hash 3f2a…
