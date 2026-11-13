@@ -1,0 +1,54 @@
+# CI on every push (decision H2; docs/handoff.md, Testing; docs/test-plan.md section 2).
+# Python 3.9 until build step 2a reads the Beacon's version (DC-1). Tools are installed from
+# requirements/dev.txt, pinned by version and hash; actions are pinned by commit.
+# demo/run_demo.sh joins from build step 2.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.9"
+
+      - name: Load vcan and bring up vcan0
+        run: |
+          sudo apt-get update
+          # GitHub's Ubuntu runners ship vcan in linux-modules-extra.
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" can-utils
+          sudo modprobe vcan
+          sudo ip link add dev vcan0 type vcan
+          sudo ip link set up vcan0
+          ip -details link show vcan0
+
+      - name: Install pinned dev tools (by hash)
+        run: python -m pip install --require-hashes -r requirements/dev.txt
+
+      - name: ruff
+        run: |
+          ruff format --check .
+          ruff check .
+
+      - name: mypy
+        run: mypy
+
+      - name: import-linter (layers, docs/modules.md section 2)
+        run: lint-imports
+
+      - name: pytest with coverage report (no threshold)
+        run: python -m pytest --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Verification coverage check, staged (DC-2)
+        run: python tools/check_verification.py --mode staged

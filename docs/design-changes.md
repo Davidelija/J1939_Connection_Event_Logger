@@ -31,6 +31,30 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-new-20261113-fault-delivery — Question: how fault-plan kinds with no platform function reach the code that detects them  (proposed), 2026-11-13
+- **Raised by:** Claude Code, build step 1, pull request "[step 1 | interfaces] types, platform interface, FakeClock, DesktopPlatform, CI"
+- **Decided by:**
+- **Change:** Question: the fault plan must be able to inject every kind in `docs/errors.md` (hand-off, Testing: Fault injection; `docs/test-plan.md` §4, `platform` row), but the platform contract (v1) has eight functions, and only four kinds belong to one of them: `can_missing` (`open_can()`), `no_bitrate` (`bitrate_check()`), `rtc_invalid` (`rtc_ok()`, `now()`) and `clock_jump` (the clock behind `now()`). The other kinds are detected in code that never calls the platform for that operation:
+  - errors on the socket `capture` reads or `transmit` sends: `can_down`, `rx_overflow`, `bus_off`, `error_passive`, `enobufs`;
+  - storage writes and syncs by `eventlog` and `store`: `enospc`, `erofs`, `eio`, `card_removed`, `slow_sync`, `state_missing`, `state_corrupt`, `state_unwritable`, `card_nearly_full`;
+  - start-up checks on files: `truncated_line`, `temp_files`, `corrupt_file`;
+  - the service: `exception`, `hang`, `restart_loop`;
+  - conditions that are bus traffic, not faults the platform can raise: `bad_frame`, `tp_error`, `etp`, `claim_change`, `cannot_claim`, `same_name_two_sa`, `tx_breach`, `vehicle_time_late`, `vehicle_time_off`;
+  - kinds outside the logger process: `cmd_*`, `ssh_*`, `link_dropped`, `long_path`, `folder_readonly`, `name_collision`, `cannot_connect`, `card_not_ext4`.
+
+  Options, for the project to choose:
+  - **(A)** Platform contract v2 gains an I/O layer: `open_can()` returns a socket wrapper, and file opens, writes and syncs go through platform functions, so `DesktopPlatform` raises each errno fault at the exact call. Largest change; `capture`, `eventlog` and `store` call the platform for every I/O.
+  - **(B)** Platform contract v2 gains one function, `fault(op: str) -> None`, which layer 1 modules call before each socket or file operation (`op` such as `"can_recv"`, `"can_send"`, `"card_write"`, `"card_sync"`, `"flash_write"`); the desktop raises `PlatformError(kind)` when the plan has a fault due for that operation, and the Beacon does nothing. Small change; the modules still own their I/O.
+  - **(C)** Keep platform v1. The fault plan carries only the four kinds above; storage faults are made by the component-test harness on the temporary card (read-only directory, removed directory, a full filesystem), bus conditions come from frames in `traffic.log`, service faults from the harness, and laptop kinds from `j1939ctl` tests. `docs/errors.md` then states, per kind, whether it is injected by the fault plan, by traffic or by the harness.
+  - Recommendation: **(B)** for the socket and storage kinds, with (C) for kinds that are bus traffic or outside the logger process. It keeps the platform small and leaves real I/O in `capture`, `eventlog` and `store`.
+
+  Also to confirm with this entry: the fault-plan semantics `DesktopPlatform` uses for the four delivered kinds (active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run; `clock_jump` steps wall time by `args["s"]` when monotonic time reaches `at_mono`).
+- **Why:** step 1 merges the interface code before its freeze (`docs/modules.md` §6), and test-script writers build component tests on the fault plan; without a delivery path for most kinds, those tests cannot inject them.
+- **Affects:** platform contract (v1 to v2 under A or B); `capture`, `transmit`, `eventlog` and `store` contracts (they call the new function); `docs/errors.md` (a note per kind under C); `docs/modules.md` §5 (injection points); `docs/test-plan.md` §3 and §4; `docs/porting.md` §3 (a new platform function under A or B).
+- **Until decided:** `DesktopPlatform` delivers `can_missing`, `no_bitrate`, `rtc_invalid` and `clock_jump`; a plan with any other kind raises `NotImplementedError` naming this entry, so no test believes a fault was injected when it was not. Nothing is built on any of the options.
+- **Docs updated in the same change:** to follow the decision.
+- **Tests:** `test_PLT_2_fault_plan_refuses_kinds_without_a_delivery_path` (today); the delivery tests follow the decision.
+
 ## DC-4 — Ownership of the test harness, component and replay tests and bench procedures  (accepted, 2026-11-09)
 - **Raised by:** Claude, test plan review (test plan v2)
 - **Decided by:** Vaughan Lynn, 2026-11-09

@@ -12,6 +12,8 @@ The goal is a Beacon result for every hardware-relevant T requirement. If a Beac
 
 A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requirement marked T has no test once its Step has merged, skipping Deferred rows. For step 8 requirements, a `bench/` procedure ID in the Test-or-procedure column satisfies the check. Before a release tag the check requires every T row to have a passing test, a procedure with a result, or a recorded gap.
 
+**Merged build steps:** none. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
+
 | ID | Method | Step | Test or procedure | Where | Result | Date | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | SC-1 | I, T | 8 |  |  |  |  |  |
@@ -19,7 +21,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-3 | T | 5 |  |  |  |  |  |
 | SC-4 | T | 8 |  |  |  |  |  |
 | SC-5 | D | 8 |  |  |  |  |  |
-| SC-6 | I, A | 9 |  |  |  |  |  |
+| SC-6 | I, A | 9 | `tests/contract/` (`test_SC_6_*`), import-linter layers contract | vcan | partial: platform Protocol conformance, public names and layering in CI; inspection and analysis in step 9 | 2026-11-13 | CI, PR step-1-interfaces |
 | SC-8 | D | 2 |  |  |  |  |  |
 | SC-9 | T | 8 |  |  |  |  |  |
 | SC-10 | T | 8 |  |  |  |  |  |
@@ -41,7 +43,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-14 | T | 3 |  |  |  |  |  |
 | NP-15 | T | 3 |  |  |  |  |  |
 | NP-16 | T | 3 |  |  |  |  |  |
-| NP-17 | T | 3 |  |  |  |  |  |
+| NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3 | 2026-11-13 | CI, PR step-1-interfaces |
 | NP-18 | T | 3 |  |  |  |  |  |
 | NP-19 | T | 3 |  |  |  |  |  |
 | TRN-2 | D | 6 / 8 |  |  |  |  |  |
@@ -98,7 +100,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-13 | I | 2 |  |  |  |  |  |
 | LOG-14 | T | 2 |  |  |  |  |  |
 | LOG-15 | T | 2 |  |  |  |  |  |
-| LOG-16 | T | 2 |  |  |  |  |  |
+| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2 | 2026-11-13 | CI, PR step-1-interfaces |
 | LOG-17 | T | 2 |  |  |  |  |  |
 | LOG-18 | T | 2 |  |  |  |  |  |
 | LOG-19 | T, I | 2 |  |  |  |  |  |
@@ -107,7 +109,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-22 | T | 6 |  |  |  |  |  |
 | LOG-23 | T | 2 |  |  |  |  |  |
 | LOG-24 | T | — | Deferred, not built |  |  |  |  |
-| STS-1 | D | 8 |  |  |  |  |  |
+| STS-1 | D | 8 | `test_STS_1_set_light_*` | vcan | partial: desktop `set_light()` patterns only; light priority in step 7, A8 in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | STS-2 | D | 7 / 8 |  |  |  |  |  |
 | STS-3 | I | 7 |  |  |  |  |  |
 | STS-4 | I, D | 8 |  |  |  |  |  |
@@ -123,7 +125,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-15 | T | — | Deferred, not built |  |  |  |  |
 | STS-16 | T | — | Deferred, not built |  |  |  |  |
 | STS-17 | T | 7 |  |  |  |  |  |
-| STS-18 | T | 2 |  |  |  |  |  |
+| STS-18 | T | 2 | `test_STS_18_watchdog_kicks_are_counted` | vcan | partial: desktop `watchdog_kick()` only; hang detection in step 2 | 2026-11-13 | CI, PR step-1-interfaces |
 | STS-19 | T | 2 |  |  |  |  |  |
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
@@ -152,14 +154,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | HW-5 | T | — | Deferred, not built |  |  |  |  |
 | HW-6 | T | 8 |  |  |  |  |  |
 | HW-7 | T | 8 |  |  |  |  |  |
-| HW-8 | T | 8 |  |  |  |  |  |
+| HW-8 | T | 8 | `test_HW_8_on_wake_reports_wake_and_ready_times` | vcan | partial: desktop `on_wake()` only; ready time measured in A6, step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | HW-9 | I | 8 |  |  |  |  |  |
 | HW-10 | I | 8 |  |  |  |  |  |
 | PLT-1 | I | 2a |  |  |  |  |  |
-| PLT-2 | T | 8 |  |  |  |  |  |
+| PLT-2 | T | 8 | `test_PLT_2_open_can_*` (vcan0), `test_PLT_2_fault_plan_*` | vcan | partial: desktop half (kernel timestamps, own frames); controller features on hardware in B-PLT2, step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | PLT-3 | I, T | 8 |  |  |  |  |  |
 | PLT-4 | T | — | Deferred, not built |  |  |  |  |
-| PLT-5 | I | 8 |  |  |  |  |  |
+| PLT-5 | I | 8 | `test_PLT_5_paths_*` | vcan | partial: desktop `paths()` keeps card, flash and keys apart; ext4 check in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | PLT-6 | I, D | 2a / 8 |  |  |  |  |  |
 | PLT-7 | A | 8 |  |  |  |  |  |
 | PLT-8 | I, T | 8 |  |  |  |  |  |

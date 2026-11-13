@@ -3,7 +3,22 @@
 Skeleton. Each section is filled in by the build step that delivers its feature (hand-off, Documentation to deliver) and finished in step 9 with real bench output. Each task gives when to do it, the steps, example screen output and what can go wrong.
 
 ## 1. Getting started
-- What the logger does (what it records, what it sends, what it never does, where the data goes) *(step 1)*
+
+### What the logger does
+
+The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connector. During training it learns which devices normally sit on the vehicle network. After that it watches every session, from key-on to key-off, for anything new: an ELD, a scan tool or any other device.
+
+**What it records.** For each new device: when it connected and disconnected, its address and NAME, what kind of device it seems to be, what it sent and what it asked for. It also records raw CAN frames from 10 s before to 60 s after each new connection. Records are hash-chained, so a changed or missing record shows up when the logs are checked.
+
+**What it sends.** Only a small, fixed set of frames: its own address claim (always at an address from 128 to 247, and it always gives way in a conflict), and requests for address claims, the vehicle's time and date, the VIN, and the identity of new devices, plus the replies J1939 requires of every node (answering a request for its address claim, refusing other requests addressed to it, and transport-protocol handshakes for replies sent to it). It sends at most 10 frames a second.
+
+**What it never does.** It never sends a command, a clear or a write, and never gives data to other devices. It does not use Wi-Fi or Bluetooth. It never deletes its event logs, not even after retrieval.
+
+**Where the data goes.** Everything is written to the logger's card. A maintenance laptop retrieves the logs over a wired SSH connection, checks the chain and produces a report for review.
+
+*(The rest of this chapter is written as each build step lands.)*
+
+- What you need *(step 7)*
 - What you need *(step 7)*
 - Running the no-hardware demo on a Linux machine or VM (`demo/run_demo.sh`) *(from step 2)*
 - Setting up the Windows laptop and connecting it: the logger's fixed address (`network.address`) and its DHCP server on the wired port *(step 7)*

@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "j1939-logger"
+version = "0.0.0"
+description = "J1939 diagnostic-port connected-devices event logger (SYSE 549, Colorado State University)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+# Run time: the standard library only (CLAUDE.md, Environment).
+dependencies = []
+
+[project.optional-dependencies]
+# Optional CAN input inside src/j1939logger/platform/ only (X22).
+can = ["python-can==4.6.1"]
+# Development tools, pinned by version here and by hash in requirements/dev.txt.
+# python-can is for the test harness only (witness and ecu_sim).
+dev = [
+    "pytest==8.4.2",
+    "hypothesis==6.141.1",
+    "ruff==0.17.5",
+    "mypy==1.19.1",
+    "pytest-cov==7.1.0",
+    "import-linter==2.5.2",
+    "python-can==4.6.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: level 1, a module's public functions",
+    "contract: level 1, Protocol conformance and public names",
+    "malformed: level 1, generated malformed input (SC-12a)",
+    "component: level 2, session in-process with DesktopPlatform and FakeClock",
+    "replay: level 3, the service on vcan0",
+    "slow: long-running",
+]
+
+[tool.coverage.run]
+source = ["j1939logger"]
+branch = true
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src", "tests", "tools"]
+# Code only: the specs in docs/ are not reformatted.
+extend-exclude = ["docs", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Keep Optional[X]: shared types are evaluated at run time on Python 3.9 (DC-1).
+ignore = ["UP007", "UP045"]
+
+[tool.mypy]
+python_version = "3.9"
+platform = "linux"
+strict = true
+mypy_path = "src"
+files = ["src", "tests", "tools"]
+explicit_package_bases = true
+
+# types.py keeps the contract spelling `fields: dict` and `key: tuple` (docs/modules.md section 1).
+[[tool.mypy.overrides]]
+module = "j1939logger.types"
+disallow_any_generics = false
+
+# Layering, docs/modules.md section 2. Modules may call modules in the same
+# layer or below; nothing imports main. Layers in parentheses are optional so
+# the contract holds while modules land one build step at a time. ``types``
+# (shared types) sits below platform, since every layer imports it.
+[tool.importlinter]
+root_package = "j1939logger"
+
+[[tool.importlinter.contracts]]
+name = "Layers (docs/modules.md section 2)"
+type = "layers"
+layers = [
+    "(main) : (j1939cmd)",
+    "(session) : (admin)",
+    "(detect) : (monitor) : (identify) : (address) : (requests) : (inventory) : (retention) : (status)",
+    "(decode) : (config)",
+    "(capture) : (transmit) : (eventlog) : (store) : (rawcap) : (clock)",
+    "platform",
+    "types",
+]
+containers = ["j1939logger"]
+
+# "Nothing imports main" and "python-can only inside platform/" are checked by
+# tests/contract/test_imports.py, which scans every module in src/ as it lands
+# (an import-linter forbidden contract needs each source module to exist already).
