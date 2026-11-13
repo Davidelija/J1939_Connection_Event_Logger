@@ -109,7 +109,7 @@ Safety-critical paths (`transmit`, allow-list validation in `config`, hashing in
 Ownership rules that the layering enforces:
 - Only `transmit` sends on the bus (rule 4).
 - Only `capture` receives from the bus (rule 6).
-- Only `eventlog` writes session files; only `store` writes supporting files (status, inventory and config versions, library, manufacturer list, `state.json`); only `rawcap` writes raw captures. Only the service process writes logger state (STS-23, rule 15).
+- Only `eventlog` writes session files; only `store` writes supporting files (status, inventory and config versions, library (which holds the manufacturer list, IDN-2), `state.json`); only `rawcap` writes raw captures. Only the service process writes logger state (STS-23, rule 15).
 - Only `clock` (through `platform`) gives time; no module calls `time.time()` or `datetime.now()` directly (rule 14).
 
 ## 3. Threads and data flow
@@ -138,14 +138,14 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Test seam:** `DesktopPlatform(fault_plan=[(at_mono, kind, args), ...], clock=FakeClock())` controls time and injects the platform's faults (DC-5): `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `fault(op)` `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync`. A fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run. Other kinds are injected by traffic, the harness or test setup (DC-5).
 - **Requirements:** PLT-1 to PLT-8, HW-7, HW-8, STS-1, STS-18. **Not responsible for:** any J1939 logic.
 
-### clock  (v1, layer 1) — frozen for step 1
+### clock  (v2, layer 1) — frozen for step 1; v2 (DC-10)
 - **Purpose:** one source of time and its validity.
 - **Inputs:** `platform.now()`; Time/Date replies (`J1939Msg`, PGN 65254) from the main loop.
-- **Outputs:** `now() -> ClockReading`; `mono() -> float`; `to_utc(ts_mono) -> datetime | None` (the only way any module turns a frame or event time into a record's `utc`); a `time_sync` or `fault` `Record` when the source changes or vehicle time disagrees by more than `clock.max_skew_min`.
+- **Outputs:** `now() -> ClockReading`; `mono() -> float`; `to_utc(ts_mono) -> datetime | None` (the only way any module turns a frame or event time into a record's `utc`; None while the source is `elapsed`, when `eventlog` writes `elapsed_s` instead, DC-10); `veh_time(ts_mono) -> datetime | None` (vehicle time for an event from the Time/Date offset, whole seconds, None before the first reply; v2, DC-10); `elapsed_s(ts_mono) -> float` (seconds since wake, DC-10); a `time_sync` or `fault` `Record` when the source changes or vehicle time disagrees by more than `clock.max_skew_min`.
 - **State:** vehicle-time offset; never sets the system clock (LOG-16). The kernel sets the system clock from the RTC at boot (`hctosys`, checked in step 2a), so kernel frame timestamps are right from the first frame. The logger checks `rtc_ok()` itself and records `clock_source`; it never waits for the clock.
 - **Config:** `clock.max_skew_min`. **Requirements:** LOG-16. **Test seam:** `FakeClock` with `advance(s)` and `jump(s)`.
 
-### config  (v1, layer 2)
+### config  (v1, layer 2) — frozen for step 2
 - **Purpose:** validate and version the config; also validates the inventory and library files.
 - **Inputs:** a config file (JSON) and the previous active version, loaded by `store`; inventory (`inv-1`) and library (`lib-1`) contents from `store`.
 - **Outputs:** `Config` (typed, read-only) or `ConfigError(reasons)`; `validate_inventory(data) -> Inventory | InventoryError`; `validate_library(data) -> Library | LibraryError`; `config_change` / `config_rejected` `Record` with changed fields and whether the change weakens detection.
@@ -219,19 +219,19 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Errors:** a corrupt file gives `InventoryError` from validation; `session` then runs untrained (STS-19).
 - **Config:** `training.*`. **Requirements:** TRN-2 to TRN-7, TRN-10 to TRN-15. **Test seam:** pure operations on an `Inventory` value (file round-trip tests belong to `store`).
 
-### eventlog  (v1, layer 1) — frozen for step 1 (append only)
+### eventlog  (v1, layer 1) — frozen for step 1 (append only); frozen for step 2
 - **Frozen for step 1 (append only, DC-8):** appending a `Record` (adds `rec`, `written`, `prev` and `hash`; assigns `event_id`), the hash rule in `docs/log-format.md`, one `write()` per record to an `O_APPEND` file, `sync_now()` and the last hash. Session parts, roll-over and rebuilding the last hash after a crash freeze with the rest of `eventlog` in step 2.
 - **Purpose:** append records to the session file and keep the hash chain (session files only).
 - **Inputs:** `Record`s from any layer 3 or 4 module via `session`; `sync_now()` requests; the starting `prev` from `session`.
 - **Outputs:** lines in the session file (adds `written`, `prev`, `hash`, assigns `event_id`); the last hash.
-- **Rules:** one `write()` per record to an `O_APPEND` file; directory synced after each rename; sync on its own thread; after a crash, the last hash is rebuilt from the last complete line of the newest session file; calls `platform.fault("card_write")` and `platform.fault("card_sync")` before each write and sync (DC-5).
+- **Rules:** one `write()` per record to an `O_APPEND` file; directory synced after each rename; sync on its own thread; after a crash, the last hash is rebuilt from the last complete line of the newest session file, which wins over `state.json`; `state.json` gives the last hash only for the LOG-5 cases without session files (DC-10); records with `clock_source` `elapsed` carry `elapsed_s` and null `utc` and `written` (DC-10); calls `platform.fault("card_write")` and `platform.fault("card_sync")` before each write and sync (DC-5).
 - **Errors:** storage errors become a `fault` `Record` and a fast blink (LOG-22); logging never crashes the logger.
 - **Config:** `logging.*`, `storage.*`. **Requirements:** LOG-3 to LOG-5, LOG-7 to LOG-9, LOG-23. **Test seam:** a temporary directory; `verify_chain` over the result.
 
-### store  (v1, layer 1)
+### store  (v1, layer 1) — frozen for step 2
 - **Purpose:** load and write every supporting file.
 - **Inputs:** `platform.paths()`; contents to write from `session` (status, new inventory and config versions, `state.json`); the free list from `retention`.
-- **Outputs:** `load(kind, version=None) -> bytes | None` for status, inventory, config, library, manufacturer list and state; `write_atomic(kind, name, data)` (temporary file, sync, rename, directory sync); `versions(kind)`; `usage() -> CardUsage`; `free(files)`.
+- **Outputs:** `load(kind, version=None) -> bytes | None` for status, inventory, config, library and state (the manufacturer list is part of the library, IDN-2; DC-10); `write_atomic(kind, name, data)` (temporary file, sync, rename, directory sync); `versions(kind)`; `usage() -> CardUsage`; `free(files)`.
 - **Rules:** the only writer of supporting files; never writes session files or raw captures; frees only what `retention` lists; `state.json` is on internal flash, everything else on the card; calls `platform.fault()` before each write and sync (`card_write`, `card_sync`, `flash_write`, DC-5).
 - **Errors:** storage errors become a `fault` `Record` (LOG-22); a missing file loads as None; leftover temporary files are ignored (LOG-23).
 - **Config:** `storage.*`. **Requirements:** LOG-5 (state file), LOG-13, LOG-23, TRN-6, STS-3. **Test seam:** a temporary directory; file round-trip tests; write errors from the fault plan.
@@ -255,16 +255,18 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Outputs:** the status file contents (`status-1`), written by `store`; `platform.set_light()` with the priority fast > slow > steady (the layer 3 exception in section 2).
 - **Requirements:** STS-1 to STS-3. **Test seam:** state in, file contents and light pattern out (table-driven).
 
-### session  (v1, layer 4)
+### session  (v1, layer 4) — frozen for step 2
 - **Purpose:** the session lifecycle and the main loop.
 - **Inputs:** wake from `platform`; frames from `capture`; commands from `cmdserver`; the restart guard state; `state.json` from `store` (logger ID, last session number, last hash).
 - **Outputs:** `session_start` and `session_end` `Record`s; session files and parts; calls into every layer 3 module in order; watchdog kicks.
 - **Performance budget:** main-loop latency from frame receipt to record, against DET-16's 2 s: to be measured in SC-9 and recorded here.
-- **Rules:** `state.json` is written at session start and after each session part; the next session number is one more than the higher of `state.json` and the newest session file on the card; a blank card with a state file is a new card (`new_card: true`, first `prev` 64 zeros); a card with sessions and no (or a corrupt) state file continues numbering and the chain from the card; a blank card with no state file is a new logger (LOG-5); 30 s silence key-off (`session.end_silence_s`); roll-over (`logging.session_rollover_h`); start-up self-check (STS-19); restart guard (NP-19).
+- **Rules:** `state.json` is written at session start and after each session part; the next session number is one more than the higher of `state.json` and the newest session file on the card; a blank card with a state file is a new card (`new_card: true`, first `prev` 64 zeros); a card with sessions and no (or a corrupt) state file continues numbering and the chain from the card; a blank card with no state file is a new logger (LOG-5); 30 s silence key-off (`session.end_silence_s`); after `session_end` the logger waits listen-only and starts a new session (wake cause "CAN activity") on the next frame (DC-10); roll-over (`logging.session_rollover_h`): `session_end` with reason "session roll-over", then a new part starting with a repeated `session_start` (`part` + 1, same session number) (DC-10); start-up self-check (STS-19); restart guard (NP-19).
+- **Previous session end (LOG-12, LOG-18, STS-18; DC-10):** clean if the newest session file ends with `session_end`; otherwise the cause in the diagnostic log's last entry (software restart, watchdog restart); otherwise power loss, with the bytes cut off equal to the length of any incomplete last line.
+- **Frames that aren't J1939 (DC-10):** `session_end.frames_not_j1939` uses the log-format keys; `session` maps `DecodeStats.non_j1939["standard"]` to `std_11bit`.
 - **Requirements:** LOG-1, LOG-2, LOG-6, LOG-12, LOG-17, LOG-18, TRN-9, NP-19, STS-18, STS-19. **Test seam:** run in-process with `DesktopPlatform` and `FakeClock`; this is the component-test entry point.
 
 ### admin  (v1, layer 4)
-- **Purpose:** restart, retrain and the diagnostic log.
+- **Purpose:** restart, retrain and the diagnostic log. The diagnostic-log writer is built in step 2 in minimal form (`diag/logger.log`, rotated by `diag.max_bytes` and `diag.files`, the conventions in §1), before `admin` freezes in step 7 (DC-10).
 - **Inputs:** commands from `session`.
 - **Outputs:** `reset` `Record`s; the diagnostic log (separate from evidence, `diag.*`).
 - **Requirements:** STS-11, STS-12, LOG-20. **Not built:** move, wipe, library push, update, rollback, roles (Deferred).
@@ -288,7 +290,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Outputs:** plain-word screens, the one prompt pattern (what will change, reason, y/N), exit codes (LAP-15); retrieved folders made read-only; the last hash per logger; the summary report.
 - **Requirements:** LAP-1 to LAP-15, LAP-17, STS-7, STS-9. **Test seam:** against a local logger on `vcan0` through `j1939cmd`, as in `demo/run_demo.sh`.
 
-### verify_chain  (v1, tool)
+### verify_chain  (v1, tool) — frozen for step 2
 - **Purpose:** check a set of session files.
 - **Inputs:** a folder of session files; optionally the last hash kept by the laptop.
 - **Outputs:** pass, or the first broken or missing record with its line; a replacement card's first record (64 zeros, `session_start` noting "new card") reported as a declared chain break, not a failure; format-version check; a truncated last line reported as truncated, not broken. Exit code 0 on pass.
@@ -350,7 +352,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 | Build step | Contracts frozen before it starts |
 |---|---|
 | 1. Thin slice | `types`, `platform`, `capture`, `decode`, `eventlog` (append only), `clock` — **frozen 2026-11-13** |
-| 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` |
+| 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` — **frozen 2026-11-13** |
 | 2a. Beacon go/no-go | none (no code) |
 | 3. Transmit | `transmit`, `address`, `requests` |
 | 4. Detection | `detect`, `monitor` |

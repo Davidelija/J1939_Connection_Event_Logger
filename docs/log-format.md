@@ -8,12 +8,12 @@ The logger keeps one event file per session plus a few supporting files on the m
 
 | File | Contents | Written |
 | --- | --- | --- |
-| `sessions/s000142_20261106T140211Z.jsonl` | Event records for one session, from wake (or power-on) to key-off; session counter and UTC start in the name. A session longer than 24 h rolls over to a new part (`…_p2.jsonl`) | Append-only during the session |
+| `sessions/s000142_20261106T140211Z.jsonl` | Event records for one session, from wake (or power-on) to key-off; session counter and UTC start in the name, or `_noclock` in place of the UTC start when no valid time exists at session start (`s000143_noclock.jsonl`, DC-10). A session longer than 24 h rolls over to a new part (`…_p2.jsonl`): the part being closed ends with `session_end` (reason "session roll-over") and the new part starts with a repeated `session_start` with the same session number and `part` raised by one; the chain continues across parts (DC-10) | Append-only during the session |
 | `raw/s000142_c2_e1.log` | Raw CAN frames in `candump` log format, 10 s before to 60 s after each new connection and each control-flag event; named by session, connection and event number (the example files are abridged) | Once per new connection or control flag; oldest dropped first when the card fills |
 | `inventory/inv-v2.json` | Known-good inventory, one version per file, tied to the VIN | At each confirmed training or approval |
 | `config/cfg-v3.json` | All settings, one version per file | When settings change |
 | `status.json` | Current state for the status light and the maintenance laptop; not part of the hash chain | Overwritten in place |
-| `state.json` (internal flash, not the card) | Logger ID, last session number and last hash, so session numbers continue on a replacement card (LOG-5); not part of the hash chain | Atomically at each session start and after each session part |
+| `state.json` (internal flash, not the card) | Logger ID, last session number and last hash, so session numbers continue on a replacement card (LOG-5); not part of the hash chain. Layout (DC-10): `{"format": "state-1", "logger_id": "0x9FFEFFFFFFE00001", "session": 142, "last_hash": "<64 hex>"}`; `logger_id` is the logger NAME (`address.name`) | Atomically at each session start and after each session part |
 | `library/lib-v1.json` | Device library: characterized device types (matched on NAME function codes and typical requested and sent PGNs, with source address only as a hint) and the manufacturer code list, one version per file | Copied with the software over SSH (library push deferred); version recorded in session\_start |
 | `diag/logger.log` | Diagnostic log: errors, stack traces and restart causes; not hash-chained and not evidence; size-capped and rotated (5 × 10 MB) | As events occur; copied at retrieval |
 | `fallback/` | Event records written to the Beacon's internal flash when the card fails, capped at 100 MB; same hash chain | Deferred (LOG-22 fallback); not written by the prototype |
@@ -25,7 +25,8 @@ The logger keeps one event file per session plus a few supporting files on the m
 | `rec` | Record number within the session file, starting at 1 |
 | `type` | Record type (table below) |
 | `sev` | Severity: `info`, `notice` or `high` |
-| `utc` | Time of the event (for a frame, its receive timestamp): logger clock in UTC, ISO 8601 with milliseconds. Every record also carries `written`, the time it was written, in the same format |
+| `utc` | Time of the event (for a frame, its receive timestamp): logger clock in UTC, ISO 8601 with milliseconds. Every record also carries `written`, the time it was written, in the same format. While `clock_source` is `elapsed` there is no UTC: `utc` and `written` are null and the record carries `elapsed_s` instead (DC-10) |
+| `elapsed_s` | Only on records whose `clock_source` is `elapsed`: seconds since wake for the event, to the millisecond (DC-10) |
 | `veh_time` | Vehicle Time/Date (PGN 65254) at that moment, or null before the first reply; whole seconds (J1939 Time/Date resolution is 0.25 s, and the fraction is dropped), the one exception to the millisecond rule |
 | `prev` | Hash of the previous record; the first record of a session carries the last hash of the previous session (or part), or after a power loss the hash of its last complete record; an incomplete last line is never rewritten and the verifier reports it as truncated |
 | `hash` | SHA-256, as 64 lowercase hex characters, of the UTF-8 bytes of `prev` followed by this record without its `hash` field. The record is serialized as compact JSON (no spaces, separators `,` and `:`), keys in the order written, non-ASCII characters as-is, numbers exactly as written, `hash` always the last key; the verifier removes `hash` and re-serializes the same way. The first record on a new logger uses 64 zeros as `prev` |
@@ -93,3 +94,5 @@ The session header and every supporting file carry a `format` field. Any change 
 | inv-1 | First inventory format (Nov 2026) |
 | lib-1 | First device library format (Nov 2026) |
 | status-1 | First status file format (Nov 2026) |
+| state-1 | First `state.json` format (Nov 2026, DC-10) |
+| log-1 | `elapsed_s` on records without a valid time; `_noclock` file names; parts start with a repeated `session_start` (DC-10). No release had shipped, so the format stays log-1 |

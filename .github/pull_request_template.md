@@ -10,6 +10,7 @@
 - [ ] `docs/verification.md` rows updated (test or procedure, where, result, date, evidence)
 - [ ] `docs/errors.md` rows added or updated, with their Test column filled in
 - [ ] Affected fixtures, manifests and `docs/test-plan.md` cases updated (through the same DC entry when the other side owns them, DC-4)
+- [ ] `docs/module-map.md` updated if a module or script was added or changed
 - [ ] User manual sections for this change updated (command reference and troubleshooting table if a command, message or fault changed)
 - [ ] `CHANGELOG.md` Unreleased section updated
 - [ ] A line added to `docs/reviews.md` for the human reviewer
