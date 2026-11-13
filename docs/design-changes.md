@@ -31,6 +31,18 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-9 — Step 1 runs the pipeline with a minimal session, a wake-timing category and the config file read directly  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1 PR 2 (branch `step-1-logic`)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. Step 1 includes a minimal `session`: a main loop that runs capture, decode, clock, detect and eventlog, and syncs at once after a `connection_start` (DET-16). The rest of `session` (header, end record, parts, roll-over, `state.json`, self-check, watchdog, restart guard) is built against its frozen contract in step 2.
+  2. Step 1's minimal `detect`: an address claim by a NAME that is not in the inventory opens a connection and writes `connection_start` with `classification_rule` "wake timing": a first claim within `classify.wake_window_s` of the session's first frame gives "vehicle ECU not in baseline", a later one "external device (unrecognized)", both high. With no inventory the session is untrained and severity is capped at notice (TRN-9). An approved external device in the inventory gets an info `connection_start` in the short form (NAME and entry ID). Baseline ECUs get none. `identify` takes over classification in step 5; the rest of `detect` comes in step 4.
+  3. Step 1 reads the settings it needs straight from the config file (cfg-1 JSON), without validation, in the entry point; the `config` module replaces this in step 2. The inventory's NAMEs, entry IDs and categories are read the same way until step 6.
+- **Why:** the step 1 gate (a replayed new claim gives a chained `connection_start` within 2 s) needs a loop, a category and settings, and the modules that own them (`session`, `identify`, `config`, `inventory`) come in later steps.
+- **Affects:** build plan step 1 scope (`docs/handoff.md`); `session`, `detect` and `main` exist in minimal form before their contracts freeze; no contract version changes.
+- **Docs updated in the same change:** `docs/handoff.md` (build plan, step 1 scope), `CHANGELOG.md`.
+- **Tests:** `test_DET_1_*`, `test_DET_16_*` (including the `vcan0` end-to-end check).
+
 ## DC-8 — Step 1 freeze: defined outputs for capture and decode, TxRequest in the shared types, eventlog's step 1 scope  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 1 freeze pull request #3 (gaps 1 to 6)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

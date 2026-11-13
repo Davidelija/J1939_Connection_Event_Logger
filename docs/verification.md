@@ -12,7 +12,7 @@ The goal is a Beacon result for every hardware-relevant T requirement. If a Beac
 
 A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requirement marked T has no test once its Step has merged, skipping Deferred rows. For step 8 requirements, a `bench/` procedure ID in the Test-or-procedure column satisfies the check. Before a release tag the check requires every T row to have a passing test, a procedure with a result, or a recorded gap.
 
-**Merged build steps:** none. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
+**Merged build steps:** 1. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
 
 | ID | Method | Step | Test or procedure | Where | Result | Date | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -52,14 +52,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | TRN-5 | D | 7 |  |  |  |  |  |
 | TRN-6 | I | 6 |  |  |  |  |  |
 | TRN-7 | I | 6 |  |  |  |  |  |
-| TRN-9 | T | 6 |  |  |  |  |  |
+| TRN-9 | T | 6 | `test_TRN_9_untrained_session_caps_severity_at_notice` | vcan | partial: severity cap without an inventory; untrained header and light in steps 2 and 7 | 2026-11-13 | CI, PR step-1-logic |
 | TRN-10 | T | 6 |  |  |  |  |  |
 | TRN-11 | T | 6 |  |  |  |  |  |
 | TRN-12 | T | 6 |  |  |  |  |  |
 | TRN-13 | I | 6 |  |  |  |  |  |
 | TRN-14 | T | 6 |  |  |  |  |  |
 | TRN-15 | T | 6 |  |  |  |  |  |
-| DET-1 | T | 1 |  |  |  |  |  |
+| DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (step 1 minimal detect, DC-9): a NAME not in the inventory opens a connection; full detect in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-2 | T | 4 |  |  |  |  |  |
 | DET-3 | T | 4 |  |  |  |  |  |
 | DET-4 | T | 4 |  |  |  |  |  |
@@ -73,9 +73,9 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-12 | T | 4 |  |  |  |  |  |
 | DET-13 | T, A | 5 |  |  |  |  |  |
 | DET-14 | T | 6 |  |  |  |  |  |
-| DET-15 | T | 4 |  |  |  |  |  |
-| DET-16 | T | 1 |  |  |  |  |  |
-| DET-17 | T | 4 |  |  |  |  |  |
+| DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection` | vcan | partial: one connection per NAME; non-claiming devices in step 4 | 2026-11-13 | CI, PR step-1-logic |
+| DET-16 | T | 1 | `test_DET_16_new_claim_gives_synced_chained_connection_start`, `test_DET_16_connection_start_within_2_s_on_vcan0` | vcan | pass: connection_start written and synced within 2 s of the claim on vcan0; new-device light in step 7 | 2026-11-13 | CI, PR step-1-logic |
+| DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form` | vcan | partial: info connection_start for an approved device; its end record in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-18 | T | 5 |  |  |  |  |  |
 | DET-19 | T | 1 | `test_DET_19_*` | vcan | partial: decode limits (open transfers, 1785 bytes, T1 to T4, non-J1939 counts, malformed counts); pgns_per_conn in step 4, raw_mb_per_session in step 6 | 2026-11-13 | CI, PR step-1-logic |
 | IDN-1 | T | 1 | `test_IDN_1_*` | vcan | pass: NAME fields decoded as raw numbers (logger NAME, session 142 scan tool) | 2026-11-13 | CI, PR step-1-logic |
