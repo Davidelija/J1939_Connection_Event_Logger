@@ -12,12 +12,12 @@ The goal is a Beacon result for every hardware-relevant T requirement. If a Beac
 
 A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requirement marked T has no test once its Step has merged, skipping Deferred rows. For step 8 requirements, a `bench/` procedure ID in the Test-or-procedure column satisfies the check. Before a release tag the check requires every T row to have a passing test, a procedure with a result, or a recorded gap.
 
-**Merged build steps:** none. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
+**Merged build steps:** 1. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
 
 | ID | Method | Step | Test or procedure | Where | Result | Date | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | SC-1 | I, T | 8 |  |  |  |  |  |
-| SC-2 | T | 3 |  |  |  |  |  |
+| SC-2 | T | 3 | `test_SC_2_read_batch_never_waits_and_keeps_order` | vcan | partial: capture reading side; bit-rate confirmation in step 3 | 2026-11-13 | CI, PR step-1-logic |
 | SC-3 | T | 5 |  |  |  |  |  |
 | SC-4 | T | 8 |  |  |  |  |  |
 | SC-5 | D | 8 |  |  |  |  |  |
@@ -27,7 +27,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-10 | T | 8 |  |  |  |  |  |
 | SC-11 | T | 8 |  |  |  |  |  |
 | SC-12 | T | — | Deferred, not built |  |  |  |  |
-| SC-12a | T | 1 |  |  |  |  |  |
+| SC-12a | T | 1 | `test_SC_12a_*` (tests/malformed) | vcan | partial: decode under Hypothesis; monitor joins in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | NP-1 | T | 3 |  |  |  |  |  |
 | NP-2 | T | 3 |  |  |  |  |  |
 | NP-3 | T | 3 |  |  |  |  |  |
@@ -36,14 +36,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-6 | T | 3 |  |  |  |  |  |
 | NP-7 | T | 3 |  |  |  |  |  |
 | NP-8 | T | 3 |  |  |  |  |  |
-| NP-9 | T | 3 |  |  |  |  |  |
+| NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort` | vcan | partial: decode asks for Connection Abort; transmit in step 3 | 2026-11-13 | CI, PR step-1-logic |
 | NP-11 | T | 3 |  |  |  |  |  |
 | NP-12 | T | 3 |  |  |  |  |  |
 | NP-13 | T | 3 |  |  |  |  |  |
 | NP-14 | T | 3 |  |  |  |  |  |
-| NP-15 | T | 3 |  |  |  |  |  |
+| NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked` | vcan | partial: decode marks own frames and replies; exclusion from detection in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | NP-16 | T | 3 |  |  |  |  |  |
-| NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3 | 2026-11-13 | CI, PR step-1-interfaces |
+| NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing`, `test_NP_17_interface_down_raises_can_down_from_read_batch`, `test_NP_17_can_down_fault_plan_reaches_read_batch`, `test_NP_17_missing_interface_raises_can_missing_on_start` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3; capture raises can_missing and can_down | 2026-11-13 | CI, PR step-1-logic |
 | NP-18 | T | 3 |  |  |  |  |  |
 | NP-19 | T | 3 |  |  |  |  |  |
 | TRN-2 | D | 6 / 8 |  |  |  |  |  |
@@ -52,14 +52,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | TRN-5 | D | 7 |  |  |  |  |  |
 | TRN-6 | I | 6 |  |  |  |  |  |
 | TRN-7 | I | 6 |  |  |  |  |  |
-| TRN-9 | T | 6 |  |  |  |  |  |
+| TRN-9 | T | 6 | `test_TRN_9_untrained_session_caps_severity_at_notice` | vcan | partial: severity cap without an inventory; untrained header and light in steps 2 and 7 | 2026-11-13 | CI, PR step-1-logic |
 | TRN-10 | T | 6 |  |  |  |  |  |
 | TRN-11 | T | 6 |  |  |  |  |  |
 | TRN-12 | T | 6 |  |  |  |  |  |
 | TRN-13 | I | 6 |  |  |  |  |  |
 | TRN-14 | T | 6 |  |  |  |  |  |
 | TRN-15 | T | 6 |  |  |  |  |  |
-| DET-1 | T | 1 |  |  |  |  |  |
+| DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (step 1 minimal detect, DC-9): a NAME not in the inventory opens a connection; full detect in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-2 | T | 4 |  |  |  |  |  |
 | DET-3 | T | 4 |  |  |  |  |  |
 | DET-4 | T | 4 |  |  |  |  |  |
@@ -68,17 +68,17 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-7 | T | 4 |  |  |  |  |  |
 | DET-8 | T | 4 |  |  |  |  |  |
 | DET-9 | T | 4 |  |  |  |  |  |
-| DET-10 | T | 4 |  |  |  |  |  |
+| DET-10 | T | 4 | `test_DET_10_etp_is_recognized_and_counted_not_reassembled` | vcan | partial: decode recognizes ETP; connection records in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-11 | T | 4 |  |  |  |  |  |
 | DET-12 | T | 4 |  |  |  |  |  |
 | DET-13 | T, A | 5 |  |  |  |  |  |
 | DET-14 | T | 6 |  |  |  |  |  |
-| DET-15 | T | 4 |  |  |  |  |  |
-| DET-16 | T | 1 |  |  |  |  |  |
-| DET-17 | T | 4 |  |  |  |  |  |
+| DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection` | vcan | partial: one connection per NAME; non-claiming devices in step 4 | 2026-11-13 | CI, PR step-1-logic |
+| DET-16 | T | 1 | `test_DET_16_new_claim_gives_synced_chained_connection_start`, `test_DET_16_connection_start_within_2_s_on_vcan0` | vcan | pass: connection_start written and synced within 2 s of the claim on vcan0; new-device light in step 7 | 2026-11-13 | CI, PR step-1-logic |
+| DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form` | vcan | partial: info connection_start for an approved device; its end record in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-18 | T | 5 |  |  |  |  |  |
-| DET-19 | T | 1 |  |  |  |  |  |
-| IDN-1 | T | 1 |  |  |  |  |  |
+| DET-19 | T | 1 | `test_DET_19_*` | vcan | partial: decode limits (open transfers, 1785 bytes, T1 to T4, non-J1939 counts, malformed counts); pgns_per_conn in step 4, raw_mb_per_session in step 6 | 2026-11-13 | CI, PR step-1-logic |
+| IDN-1 | T | 1 | `test_IDN_1_*` | vcan | pass: NAME fields decoded as raw numbers (logger NAME, session 142 scan tool) | 2026-11-13 | CI, PR step-1-logic |
 | IDN-2 | I | 5 |  |  |  |  |  |
 | IDN-3 | T, A | 5 |  |  |  |  |  |
 | IDN-4 | T, A | 5 |  |  |  |  |  |
@@ -87,26 +87,26 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | IDN-7 | T | — | Deferred, not built |  |  |  |  |
 | LOG-1 | I | 2 |  |  |  |  |  |
 | LOG-2 | T | 2 |  |  |  |  |  |
-| LOG-3 | I, T | 2 |  |  |  |  |  |
-| LOG-4 | I | 1 |  |  |  |  |  |
-| LOG-5 | T | 1 |  |  |  |  |  |
+| LOG-3 | I, T | 2 | `test_LOG_3_*` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2 | 2026-11-13 | CI, PR step-1-logic |
+| LOG-4 | I | 1 | `test_LOG_4_*` | vcan | partial: common fields, key order and time formats written by eventlog; veh_time and elapsed-mode utc in step 2 | 2026-11-13 | CI, PR step-1-logic |
+| LOG-5 | T | 1 | `test_LOG_5_*` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-6 | I | 2 |  |  |  |  |  |
 | LOG-7 | T | 4 |  |  |  |  |  |
 | LOG-8 | I | 7 |  |  |  |  |  |
 | LOG-9 | T | 3 |  |  |  |  |  |
-| LOG-10 | T | 6 |  |  |  |  |  |
+| LOG-10 | T | 6 | `test_LOG_10_ring_keeps_raw_before_s_plus_2_seconds`, `test_LOG_10_window_includes_both_ends` | vcan | partial: capture ring and window; rawcap in step 6 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-11 | T | 6 |  |  |  |  |  |
 | LOG-12 | T | 2 |  |  |  |  |  |
 | LOG-13 | I | 2 |  |  |  |  |  |
 | LOG-14 | T | 2 |  |  |  |  |  |
-| LOG-15 | T | 2 |  |  |  |  |  |
-| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2 | 2026-11-13 | CI, PR step-1-interfaces |
+| LOG-15 | T | 2 | `test_LOG_15_*` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2 | 2026-11-13 | CI, PR step-1-logic |
+| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps | 2026-11-13 | CI, PR step-1-logic |
 | LOG-17 | T | 2 |  |  |  |  |  |
 | LOG-18 | T | 2 |  |  |  |  |  |
 | LOG-19 | T, I | 2 |  |  |  |  |  |
 | LOG-20 | T | 2 |  |  |  |  |  |
 | LOG-21 | T | — | Deferred, not built |  |  |  |  |
-| LOG-22 | T | 6 |  |  |  |  |  |
+| LOG-22 | T | 6 | `test_LOG_22_*` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-23 | T | 2 |  |  |  |  |  |
 | LOG-24 | T | — | Deferred, not built |  |  |  |  |
 | STS-1 | D | 8 | `test_STS_1_set_light_*` | vcan | partial: desktop `set_light()` patterns only; light priority in step 7, A8 in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
