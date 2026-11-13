@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-13, step 2 PR 2 (full `eventlog`, `session` lifecycle).
+Last updated: 2026-11-13, after build step 2 (PRs #5 to #8).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -69,9 +69,9 @@ flowchart TB
 | Script | Purpose | Step | Status |
 | --- | --- | --- | --- |
 | `tools/check_verification.py` | CI coverage check (DC-2): every T requirement of a merged step names an existing test; release mode also needs results and no `errors.md` placeholders. | 1 | ✅ |
-| `.github/workflows/ci.yml` | CI on every push: `vcan0`, ruff, mypy, import-linter, pytest with coverage, the coverage check. | 1 | ✅ |
-| `tools/verify_chain.py` | Standalone chain verifier: checks a folder of session files and names the first broken or missing record. | 2 | ⬜ |
-| `demo/run_demo.sh` | No-hardware demo on `vcan0` (session 142 scenario); also the CI smoke test. | 2 | ⬜ |
+| `.github/workflows/ci.yml` | CI on every push: `vcan0`, can-utils, ruff, mypy, import-linter, pytest with coverage, the no-hardware demo, the coverage check. | 1–2 | ✅ |
+| `tools/verify_chain.py` | Standalone chain verifier: checks session files across parts and sessions, names changed and missing records, reports truncated lines, new cards and open sessions without failing, refuses unknown formats. | 2 | ✅ |
+| `demo/run_demo.sh` | No-hardware demo on `vcan0`: runs the logger, replays the session 142 capture, verifies the chain and checks the scan tool's `connection_start`; also the CI smoke test. The laptop tool joins in step 7. | 2 | ✅ |
 | `tools/j1939ctl/` | The operator's laptop tool on Windows: the 16 commands, retrieval, the report. | 7 | ⬜ |
 | `tools/anonymize_capture.py` | Scrubs VINs and serial numbers from rig captures before they go in `tests/fixtures/rig/`. | — | ⬜ |
 | `release/install.sh`, `keys.sh`, service unit | Offline install, operator keys, the systemd service. | 8–9 | ⬜ |

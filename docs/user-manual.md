@@ -20,7 +20,38 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 
 - What you need *(step 7)*
 - What you need *(step 7)*
-- Running the no-hardware demo on a Linux machine or VM (`demo/run_demo.sh`) *(from step 2)*
+- Running the no-hardware demo *(below)*
+
+### Running the no-hardware demo
+
+**When:** to see the logger work before you have hardware, or to check a new copy of the software.
+
+**You need:** a Linux machine or virtual machine with Python 3.9 or later, `sudo` rights (to load the virtual CAN module), and can-utils (`sudo apt-get install can-utils` on Debian or Ubuntu).
+
+**Steps:**
+
+1. Get the repository and change into its folder.
+2. Run `bash demo/run_demo.sh`.
+
+The demo brings up a virtual CAN interface (`vcan0`), starts the logger listening only, replays a recorded capture in which a scan tool joins the bus, stops the logger, checks the hash chain and lists the records written. It ends with:
+
+```
+chain verifies: 1 files, 4 records, last hash 3f2a…
+  rec   1  session_start      info
+  rec   2  connection_start   high   sa=249 category=vehicle ECU not in baseline
+  rec   3  session_end        info
+demo passed: the scan tool's claim gave a chained connection_start
+```
+
+(The scan tool shows as "vehicle ECU not in baseline" here because the replay is fast, so it claims within 10 s of the first frame; on a truck it would join later and show as an external device.)
+
+**What can go wrong:**
+
+| Message | What to do |
+| --- | --- |
+| `modprobe: FATAL: Module vcan not found` | Install the extra kernel modules for your kernel (`sudo apt-get install linux-modules-extra-$(uname -r)`), then run the demo again. |
+| `canplayer not found: install can-utils` | `sudo apt-get install can-utils`. |
+| `logger did not start` | The logger's own messages are printed above this line; a config error names the key at fault. |
 - Setting up the Windows laptop and connecting it: the logger's fixed address (`network.address`) and its DHCP server on the wired port *(step 7)*
 - Installing the logger, including the VIN request address `requests.vin_sa` (default 0, the engine) *(step 8)*
 
@@ -39,8 +70,46 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 - Replacing the card or removing the logger; the card is ext4, so card-swap retrieval needs a Linux machine or VM; the new card starts a new chain, which the chain check reports as a declared break; session numbers carry on from the logger's internal flash (if that isn't writable, `install.sh` asks for the next session number) *(step 8)*
 
 ## 4. For analysts
-- The files on the card and the session file layout *(step 2)*
-- The chain check and what to do if it fails *(step 2)*
+
+### The files on the card
+
+The card is formatted ext4. On it:
+
+| Folder or file | What it holds |
+| --- | --- |
+| `sessions/` | One event file per session: `s000142_20261106T140211Z.jsonl` (session number and UTC start). A session longer than 24 hours continues in parts (`…_p2.jsonl`). A session started with no valid clock is named `…_noclock.jsonl`. |
+| `raw/` | Raw CAN frames around each new connection, in candump format *(from step 6)*. |
+| `inventory/`, `config/`, `library/` | One file per version of the inventory, config and device library (`inv-v2.json`, `cfg-v3.json`, `lib-v1.json`). Old versions are kept. |
+| `status.json` | The logger's current state *(from step 7)*. |
+| `diag/logger.log` | The diagnostic log: errors and restart causes. It is not evidence and not hash-chained. |
+
+The logger's internal flash (not the card) holds `state.json`: the last session number and last hash, so numbering continues when the card is replaced.
+
+**Session file layout.** Each line is one record in JSON. The first record of a session (and of each part) is `session_start`, the header: software, config, inventory and library versions, VIN, bit rate, how the previous session ended, and the logger's identity. The last is `session_end`: why it ended and the counts for the session. Between them come the events (`connection_start`, `time_sync`, `fault` and others). Every record carries its record number `rec` (which keeps counting across parts), its type, severity, time (`utc`), the time it was written, and the hash chain fields `prev` and `hash`. An event is named by session and record number, for example 142-5. The full schema is in `docs/log-format.md`.
+
+### The chain check
+
+Every record carries the hash of the record before it, so a changed, deleted or inserted record shows up. To check a set of session files (retrieved, or copied from a card):
+
+```
+python tools/verify_chain.py <folder of session files>
+```
+
+The last line says `chain verifies` (exit code 0) or `chain BROKEN` (exit code 1). Lines above it explain:
+
+| Line | Meaning |
+| --- | --- |
+| `BROKEN … record content does not match its hash (changed)` | That record was altered after it was written. |
+| `BROKEN … missing record(s) N to M before this line` | Records were deleted. |
+| `BROKEN … prev does not match the previous record (chain broken)` | Records or whole files are missing or out of place. |
+| `BROKEN … file does not start with session_start` | The start of a file was removed. |
+| `NOTE … truncated last line` | Power was lost while a record was being written; the logger never rewrites it. Not a failure. |
+| `NOTE … declared chain break: new card` | The card was replaced; the new card starts a new chain. Not a failure; the laptop's last hash from the old card keeps the gap visible. |
+| `NOTE … newest session has no session_end` | The session is still running, or did not end cleanly. |
+| `unknown format` (exit code 2) | The files come from a newer logger; use a matching version of the tool. |
+
+**If the chain check fails:** do not edit or delete the files. Keep the retrieved folder read-only and make a copy for analysis. Note the first broken record (file and line), and compare the chain with the last hash the laptop kept from the previous retrieval: anything before that hash was already verified. Report it with the logger's VIN and the session numbers to the escalation contact *(to be agreed with ORNL)*.
+
 - Opening raw captures *(step 6)*
 
 ## 5. Admin
