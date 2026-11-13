@@ -199,7 +199,7 @@ PREV_SESSION_ENDS = (
 
 RESET_MODES = ("restart", "retrain", "move", "wipe")
 
-APPROVAL_KINDS = ("device", "PGN sent", "PGN requested", "address")
+APPROVAL_KINDS = ("inventory", "device", "PGN sent", "PGN requested", "address")
 
 REMOVAL_KINDS = ("remove device", "remove PGN sent", "remove PGN requested")
 

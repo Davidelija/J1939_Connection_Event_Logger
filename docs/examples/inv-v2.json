@@ -55,7 +55,7 @@
       "pgns_approved": [
         {
           "pgn": 64892,
-          "kind": "sent",
+          "kind": "PGN sent",
           "reason": "DPF regeneration status seen during regen, RO 4471",
           "utc": "2026-10-28T16:38:05.000Z",
           "operator": "jdoe"

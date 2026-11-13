@@ -31,6 +31,17 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-7 — Example files use the enumerated values; approval kind "inventory"  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2 (item 7, parts b and c)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  - (b) Record fields that take an Enumerated value hold exactly that value; detail goes in its own field. In the session 142 example: the Component ID request outcome "no reply after 1 retry" becomes "no reply" (NP-14 already means one retry); `classification_rule` "wake timing (first claim 29 min after the session's first frame)" becomes "wake timing", with the detail in a new `classification_detail` field on `connection_start`; `id_source` becomes a list of Identification source values, `["NAME", "request pattern"]` (the function code and library version are already in the record's NAME fields and the session header). In `inv-v2.json` an approved PGN's `kind` "sent" becomes "PGN sent". The session file's hash chain is recomputed from record 5, and the `retrieval` record's `last_hash` follows it.
+  - (c) The requirements' Approval kind enum gains "inventory" (confirming a trained inventory), which `docs/log-format.md` already lists for the `approval` record.
+- **Why:** the example is the worked reference for every record; values that differ from the enums would be copied into code and tests. A confirmed training needs an approval kind.
+- **Affects:** `docs/requirements.md` (Enumerated values: Identification source, Approval kind); `docs/log-format.md` (`connection_start` gains `classification_detail`; `identification` `id_source` is a list); `types.py` (`APPROVAL_KINDS`); `docs/examples/s000142_20261106T140211Z.jsonl`, `docs/examples/inv-v2.json`. No release has shipped, so the formats stay `log-1` and `inv-1` (as X16, X28, X42).
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** `test_LOG_5_example_session_142_hash_chain_verifies`, `test_LOG_5_example_retrieval_last_hash_is_the_chain_before_it`, `test_IDN_6_example_values_use_the_requirements_enumerations`, `test_TRN_13_example_inventory_approval_kinds_use_the_enumeration`.
+
 ## DC-6 — Step 1 interface clarifications  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1, pull request #2 ("[step 1 | interfaces] ...")
 - **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
@@ -48,7 +59,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 - **Why:** gaps and disagreements between the specs found while writing the interface code (pull request #2, items 2 to 11).
 - **Affects:** platform contract (wording only; the version change is DC-5); `capture` contract (buffer and mode change; wording, no version change); enumerations in `types.py`.
 - **Docs updated in the same change:** `docs/modules.md` (§1, §4 platform and capture), `docs/porting.md` §3, `docs/requirements.md` (Enumerated values), `docs/test-plan.md` §2, §3 and §10, `docs/handoff.md` (Testing: Naming; Ground rules 3), `CLAUDE.md` rule 3.
-- **Not decided here:** whether the session 142 example's spellings ("no reply after 1 retry", free-text `id_source`, approval kind "sent") change to the enum values, and whether approval kind "inventory" (in `docs/log-format.md`) joins the requirements' Approval kind enum.
+- **Not decided here:** the session 142 example's spellings and approval kind "inventory"; both decided in DC-7.
 - **Tests:** `test_SC_6_*` contract tests; `test_STS_1_set_light_rejects_unknown_pattern`; `test_PLT_2_fault_rejects_unknown_operation`; `test_DC_2_*`.
 
 ## DC-5 — Platform `fault(op)` for socket and storage fault injection  (accepted, 2026-11-13)
