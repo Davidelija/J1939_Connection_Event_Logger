@@ -89,7 +89,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-2 | T | 2 |  |  |  |  |  |
 | LOG-3 | I, T | 2 | `test_LOG_3_*` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-4 | I | 1 | `test_LOG_4_*` | vcan | partial: common fields, key order and time formats written by eventlog; veh_time and elapsed-mode utc in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-5 | T | 1 | `test_LOG_5_*` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2 | 2026-11-13 | CI, PR step-1-logic |
+| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-6 | I | 2 |  |  |  |  |  |
 | LOG-7 | T | 4 |  |  |  |  |  |
 | LOG-8 | I | 7 |  |  |  |  |  |
@@ -100,14 +100,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-13 | I | 2 |  |  |  |  |  |
 | LOG-14 | T | 2 |  |  |  |  |  |
 | LOG-15 | T | 2 | `test_LOG_15_*` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps | 2026-11-13 | CI, PR step-1-logic |
+| LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored`, `test_LOG_16_veh_time_is_none_before_time_date_then_whole_seconds`, `test_LOG_16_elapsed_s_counts_from_wake` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps; clock v2 veh_time and elapsed_s (DC-10) | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-17 | T | 2 |  |  |  |  |  |
-| LOG-18 | T | 2 |  |  |  |  |  |
-| LOG-19 | T, I | 2 |  |  |  |  |  |
-| LOG-20 | T | 2 |  |  |  |  |  |
+| LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session` | vcan | partial: restart cause kept for the next session; the header in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-19 | T, I | 2 | `test_LOG_19_unknown_formats_are_refused` | vcan | partial: config, inventory and library refuse unknown formats; verifier in PR 3 | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-20 | T | 2 | `test_LOG_20_*` | vcan | partial: diagnostic log format, repeat counting, rotation; session logging into it in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-21 | T | — | Deferred, not built |  |  |  |  |
-| LOG-22 | T | 6 | `test_LOG_22_*` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-23 | T | 2 |  |  |  |  |  |
+| LOG-22 | T | 6 | `test_LOG_22_*`, `test_LOG_22_card_write_error_gives_high_fault_and_keeps_old_file` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6; store storage faults | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-23 | T | 2 | `test_LOG_23_*` | vcan | partial: store writes atomically (temporary file, sync, rename, directory sync), never overwrites versions, ignores leftover temporary files; status file written by session in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-24 | T | — | Deferred, not built |  |  |  |  |
 | STS-1 | D | 8 | `test_STS_1_set_light_*` | vcan | partial: desktop `set_light()` patterns only; light priority in step 7, A8 in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | STS-2 | D | 7 / 8 |  |  |  |  |  |
@@ -116,7 +116,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-5 | D | 7 / 8 |  |  |  |  |  |
 | STS-7 | D | 7 |  |  |  |  |  |
 | STS-8 | I | 9 |  |  |  |  |  |
-| STS-9 | T | 7 |  |  |  |  |  |
+| STS-9 | T | 7 | `test_STS_9_*` | vcan | partial: validation, allow-list and move-grace rejection, weakening flags and records; push from the laptop in step 7 | 2026-11-13 | CI, PR step-2-store-config |
 | STS-10 | T | — | Deferred, not built |  |  |  |  |
 | STS-11 | T | 7 |  |  |  |  |  |
 | STS-12 | T | 7 |  |  |  |  |  |
@@ -126,7 +126,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-16 | T | — | Deferred, not built |  |  |  |  |
 | STS-17 | T | 7 |  |  |  |  |  |
 | STS-18 | T | 2 | `test_STS_18_watchdog_kicks_are_counted` | vcan | partial: desktop `watchdog_kick()` only; hang detection in step 2 | 2026-11-13 | CI, PR step-1-interfaces |
-| STS-19 | T | 2 |  |  |  |  |  |
+| STS-19 | T | 2 | `test_STS_19_*` | vcan | partial: corrupt config and inventory detected; start-up self-check in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
 | STS-22 | T | — | Deferred, not built |  |  |  |  |
