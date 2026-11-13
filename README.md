@@ -8,7 +8,7 @@ J1939 diagnostic-port connected-devices event logger (SYSE 549 project, Colorado
 - Module map (what each module and script is for, and its status): `docs/module-map.md`
 - Rules for Claude Code: `CLAUDE.md`
 - Licence: MIT (`LICENSE`), provided without support after the semester
-- Status: build step 1 complete (receive-only pipeline on `vcan0`: a new device gives a chained `connection_start` within 2 s); build step 2 (sessions and chain) in progress.
+- Status: build steps 1 and 2 complete: receive-only logger on `vcan0` with sessions, the full hash chain, the chain verifier and the no-hardware demo. Next: step 2a (Beacon go/no-go) and step 3 (transmit).
 
 ## Development
 

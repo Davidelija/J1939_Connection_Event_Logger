@@ -12,7 +12,7 @@ The goal is a Beacon result for every hardware-relevant T requirement. If a Beac
 
 A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requirement marked T has no test once its Step has merged, skipping Deferred rows. For step 8 requirements, a `bench/` procedure ID in the Test-or-procedure column satisfies the check. Before a release tag the check requires every T row to have a passing test, a procedure with a result, or a recorded gap.
 
-**Merged build steps:** 1. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
+**Merged build steps:** 1, 2. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
 
 | ID | Method | Step | Test or procedure | Where | Result | Date | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -22,7 +22,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-4 | T | 8 |  |  |  |  |  |
 | SC-5 | D | 8 |  |  |  |  |  |
 | SC-6 | I, A | 9 | `tests/contract/` (`test_SC_6_*`), import-linter layers contract | vcan | partial: platform Protocol conformance, public names and layering in CI; inspection and analysis in step 9 | 2026-11-13 | CI, PR step-1-interfaces |
-| SC-8 | D | 2 |  |  |  |  |  |
+| SC-8 | D | 2 | `demo/run_demo.sh` (CI step) | vcan | pass: the logger runs unchanged on desktop Linux against vcan0, replaying recorded traffic with canplayer | 2026-11-13 | CI, PR step-2-verify-demo |
 | SC-9 | T | 8 |  |  |  |  |  |
 | SC-10 | T | 8 |  |  |  |  |  |
 | SC-11 | T | 8 |  |  |  |  |  |
@@ -86,10 +86,10 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | IDN-6 | T | 5 |  |  |  |  |  |
 | IDN-7 | T | — | Deferred, not built |  |  |  |  |
 | LOG-1 | I | 2 |  |  |  |  |  |
-| LOG-2 | T | 2 | `test_LOG_2_roll_over_continues_rec_and_chain_in_part_2` | vcan | pass: roll-over ends the part with session_end, the next part starts with session_start, rec and the chain continue (DC-10, DC-11) | 2026-11-13 | CI, PR step-2-session |
+| LOG-2 | T | 2 | `test_LOG_2_roll_over_continues_rec_and_chain_in_part_2`, `test_LOG_2_parts_are_checked_in_order_with_continuing_record_numbers` | vcan | pass: roll-over ends the part with session_end, the next part starts with session_start, rec and the chain continue (DC-10, DC-11); verifier checks parts in order | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-3 | I, T | 2 | `test_LOG_3_*`, `test_LOG_3_sync_thread_syncs_every_interval` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2; periodic sync thread | 2026-11-13 | CI, PR step-2-session |
 | LOG-4 | I | 1 | `test_LOG_4_*` | vcan | partial: common fields, key order and time formats written by eventlog; veh_time and elapsed-mode utc in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions | 2026-11-13 | CI, PR step-2-session |
+| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card`, `test_LOG_5_new_card_is_a_declared_break_not_a_failure` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions; verifier reports a new card as a declared break | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-6 | I | 2 | `test_LOG_6_session_start_header_has_every_field` | vcan | partial: every header field present; VIN, address and restart guard are placeholders until step 3 (DC-11) | 2026-11-13 | CI, PR step-2-session |
 | LOG-7 | T | 4 |  |  |  |  |  |
 | LOG-8 | I | 7 |  |  |  |  |  |
@@ -98,12 +98,12 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-11 | T | 6 |  |  |  |  |  |
 | LOG-12 | T | 2 | `test_LOG_12_*` | vcan | pass: clean end and power loss (bytes cut off) recognized at the next start; the summary gap is shown by the laptop in step 7 | 2026-11-13 | CI, PR step-2-session |
 | LOG-13 | I | 2 |  |  |  |  |  |
-| LOG-14 | T | 2 |  |  |  |  |  |
+| LOG-14 | T | 2 | `test_LOG_14_*` | vcan | pass: two sessions verify as one chain; a changed, deleted or missing record or file is named; truncated last line reported as truncated; laptop last hash checked; the demo verifies the chain in CI | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-15 | T | 2 | `test_LOG_15_*`, `test_LOG_15_header_and_end_carry_buffer_size_and_kernel_drops` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2; session_start buffer size and session_end kernel drops | 2026-11-13 | CI, PR step-2-session |
 | LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored`, `test_LOG_16_veh_time_is_none_before_time_date_then_whole_seconds`, `test_LOG_16_elapsed_s_counts_from_wake`, `test_LOG_16_without_valid_time_file_is_noclock_and_records_carry_elapsed_s` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps; clock v2 veh_time and elapsed_s (DC-10); no-clock session files and elapsed_s | 2026-11-13 | CI, PR step-2-session |
 | LOG-17 | T | 2 | `test_LOG_17_key_off_after_30_s_silence_then_new_session_on_next_frame` | vcan | partial: session ends after 30 s silence and the next frame opens a new session; open connections end with key-off in step 4 | 2026-11-13 | CI, PR step-2-session |
 | LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session`, `test_LOG_18_software_restart_cause_from_the_diagnostic_log` | vcan | partial: restart cause kept for the next session; the header in PR 2; next header records software restart | 2026-11-13 | CI, PR step-2-session |
-| LOG-19 | T, I | 2 | `test_LOG_19_unknown_formats_are_refused` | vcan | partial: config, inventory and library refuse unknown formats; verifier in PR 3 | 2026-11-13 | CI, PR step-2-store-config |
+| LOG-19 | T, I | 2 | `test_LOG_19_unknown_formats_are_refused`, `test_LOG_19_unknown_format_is_refused` | vcan | partial: config, inventory and library refuse unknown formats; verifier in PR 3; verifier refuses an unknown session format (exit code 2) | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-20 | T | 2 | `test_LOG_20_*` | vcan | partial: diagnostic log format, repeat counting, rotation; session logging into it in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-21 | T | — | Deferred, not built |  |  |  |  |
 | LOG-22 | T | 6 | `test_LOG_22_*`, `test_LOG_22_card_write_error_gives_high_fault_and_keeps_old_file`, `test_LOG_22_storage_fault_is_logged_after_the_card_returns` | vcan | partial: platform fault(op) and eventlog storage faults; reserve and card-full handling in step 6; store storage faults; session logs storage faults once the card returns | 2026-11-13 | CI, PR step-2-session |
