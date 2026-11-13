@@ -31,29 +31,36 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
-## DC-new-20261113-fault-delivery — Question: how fault-plan kinds with no platform function reach the code that detects them  (proposed), 2026-11-13
-- **Raised by:** Claude Code, build step 1, pull request "[step 1 | interfaces] types, platform interface, FakeClock, DesktopPlatform, CI"
-- **Decided by:**
-- **Change:** Question: the fault plan must be able to inject every kind in `docs/errors.md` (hand-off, Testing: Fault injection; `docs/test-plan.md` §4, `platform` row), but the platform contract (v1) has eight functions, and only four kinds belong to one of them: `can_missing` (`open_can()`), `no_bitrate` (`bitrate_check()`), `rtc_invalid` (`rtc_ok()`, `now()`) and `clock_jump` (the clock behind `now()`). The other kinds are detected in code that never calls the platform for that operation:
-  - errors on the socket `capture` reads or `transmit` sends: `can_down`, `rx_overflow`, `bus_off`, `error_passive`, `enobufs`;
-  - storage writes and syncs by `eventlog` and `store`: `enospc`, `erofs`, `eio`, `card_removed`, `slow_sync`, `state_missing`, `state_corrupt`, `state_unwritable`, `card_nearly_full`;
-  - start-up checks on files: `truncated_line`, `temp_files`, `corrupt_file`;
-  - the service: `exception`, `hang`, `restart_loop`;
-  - conditions that are bus traffic, not faults the platform can raise: `bad_frame`, `tp_error`, `etp`, `claim_change`, `cannot_claim`, `same_name_two_sa`, `tx_breach`, `vehicle_time_late`, `vehicle_time_off`;
-  - kinds outside the logger process: `cmd_*`, `ssh_*`, `link_dropped`, `long_path`, `folder_readonly`, `name_collision`, `cannot_connect`, `card_not_ext4`.
+## DC-6 — Step 1 interface clarifications  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2 ("[step 1 | interfaces] ...")
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** ten points the step 1 interface code exposed, each settled as follows:
+  1. `Paths(card, flash, keys)` is defined in `platform/interface.py`, not in the shared types.
+  2. Platform `now()` reports `rtc`, or `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset.
+  3. `capture` sets the CAN receive buffer (`SO_RCVBUFFORCE`, `can.rx_buffer_bytes`) and reads it back; `open_can()` does not.
+  4. Switching from listen-only to normal mode (NP-2): `capture` closes the socket and calls `open_can(listen_only=False)`. No new platform function. Any receive gap is measured in step 3.
+  5. Dev tools are pinned by version in `pyproject.toml` and by hash in `requirements/dev.txt`.
+  6. Enumerated values: a note in parentheses that names a config key, a synonym or a scope is not part of the value ("silence", "power loss", "needs training", "NAME"); the Category values keep their parentheses.
+  7. `types.py` writes optional fields as `Optional[X]` (DC-1), because the shared types are evaluated at run time.
+  8. Tests of project tooling start with the DC ID that defines the tool (`test_DC_2_...`) instead of a requirement ID.
+  9. SC-2 stays at step 3; the step 1 `capture` test covers the reading side early.
+  10. A bad argument to a platform function (an unknown light pattern or `fault()` operation) is a programming error and raises `ValueError`, not `PlatformError`.
+- **Why:** gaps and disagreements between the specs found while writing the interface code (pull request #2, items 2 to 11).
+- **Affects:** platform contract (wording only; the version change is DC-5); `capture` contract (buffer and mode change; wording, no version change); enumerations in `types.py`.
+- **Docs updated in the same change:** `docs/modules.md` (§1, §4 platform and capture), `docs/porting.md` §3, `docs/requirements.md` (Enumerated values), `docs/test-plan.md` §2, §3 and §10, `docs/handoff.md` (Testing: Naming; Ground rules 3), `CLAUDE.md` rule 3.
+- **Not decided here:** whether the session 142 example's spellings ("no reply after 1 retry", free-text `id_source`, approval kind "sent") change to the enum values, and whether approval kind "inventory" (in `docs/log-format.md`) joins the requirements' Approval kind enum.
+- **Tests:** `test_SC_6_*` contract tests; `test_STS_1_set_light_rejects_unknown_pattern`; `test_PLT_2_fault_rejects_unknown_operation`; `test_DC_2_*`.
 
-  Options, for the project to choose:
-  - **(A)** Platform contract v2 gains an I/O layer: `open_can()` returns a socket wrapper, and file opens, writes and syncs go through platform functions, so `DesktopPlatform` raises each errno fault at the exact call. Largest change; `capture`, `eventlog` and `store` call the platform for every I/O.
-  - **(B)** Platform contract v2 gains one function, `fault(op: str) -> None`, which layer 1 modules call before each socket or file operation (`op` such as `"can_recv"`, `"can_send"`, `"card_write"`, `"card_sync"`, `"flash_write"`); the desktop raises `PlatformError(kind)` when the plan has a fault due for that operation, and the Beacon does nothing. Small change; the modules still own their I/O.
-  - **(C)** Keep platform v1. The fault plan carries only the four kinds above; storage faults are made by the component-test harness on the temporary card (read-only directory, removed directory, a full filesystem), bus conditions come from frames in `traffic.log`, service faults from the harness, and laptop kinds from `j1939ctl` tests. `docs/errors.md` then states, per kind, whether it is injected by the fault plan, by traffic or by the harness.
-  - Recommendation: **(B)** for the socket and storage kinds, with (C) for kinds that are bus traffic or outside the logger process. It keeps the platform small and leaves real I/O in `capture`, `eventlog` and `store`.
-
-  Also to confirm with this entry: the fault-plan semantics `DesktopPlatform` uses for the four delivered kinds (active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run; `clock_jump` steps wall time by `args["s"]` when monotonic time reaches `at_mono`).
-- **Why:** step 1 merges the interface code before its freeze (`docs/modules.md` §6), and test-script writers build component tests on the fault plan; without a delivery path for most kinds, those tests cannot inject them.
-- **Affects:** platform contract (v1 to v2 under A or B); `capture`, `transmit`, `eventlog` and `store` contracts (they call the new function); `docs/errors.md` (a note per kind under C); `docs/modules.md` §5 (injection points); `docs/test-plan.md` §3 and §4; `docs/porting.md` §3 (a new platform function under A or B).
-- **Until decided:** `DesktopPlatform` delivers `can_missing`, `no_bitrate`, `rtc_invalid` and `clock_jump`; a plan with any other kind raises `NotImplementedError` naming this entry, so no test believes a fault was injected when it was not. Nothing is built on any of the options.
-- **Docs updated in the same change:** to follow the decision.
-- **Tests:** `test_PLT_2_fault_plan_refuses_kinds_without_a_delivery_path` (today); the delivery tests follow the decision.
+## DC-5 — Platform `fault(op)` for socket and storage fault injection  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, build step 1, pull request #2, as the question DC-new-20261113-fault-delivery
+- **Decided by:** Vaughan Lynn, 2026-11-13 (option B; chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** the platform contract goes from v1 to v2 with a ninth function, `fault(op: str) -> None`. Layer 1 modules call it just before each operation in `FAULT_OPS`: `can_recv` (`capture`), `can_send` (`transmit`), `card_write` (`eventlog`, `store`, `rawcap`), `card_sync` (`eventlog`, `store`) and `flash_write` (`store`). `DesktopPlatform` raises `PlatformError(kind)` while a planned fault is active for that operation: `can_down` (`can_recv`, `can_send`), `enobufs` (`can_send`), `enospc`, `erofs` (`card_write`), `eio`, `card_removed` (`card_write`, `card_sync`), `state_unwritable` (`flash_write`); `slow_sync` delays `card_sync` by `args["s"]` seconds instead of raising. `args["ops"]` narrows a kind to some of its operations. Hardware implementations do nothing in `fault()`.
+  Fault-plan semantics (all kinds the plan delivers): a fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run; `clock_jump` steps wall time by `args["s"]` when monotonic time reaches `at_mono`. The plan also delivers `can_missing` (`open_can()`), `no_bitrate` (`bitrate_check()` returns None) and `rtc_invalid` (`rtc_ok()` False, `now()` source `elapsed`).
+- **Why:** the fault plan must inject the socket and storage errors in `docs/errors.md`, which are detected in modules that otherwise never call the platform. Of the options raised (A: route all I/O through the platform; B: one `fault(op)` hook; C: inject by harness and traffic only), B keeps the platform small and leaves real I/O in the layer 1 modules.
+- **Not covered:** the other 35 kinds (bus traffic such as `bus_off`, `bad_frame`, `tp_error`, `claim_change`; file contents such as `truncated_line`, `corrupt_file`, `state_corrupt`; service events `exception`, `hang`, `restart_loop`; `rx_overflow`; vehicle time; `card_nearly_full`; and the command, laptop and install kinds). A plan naming one of them raises `NotImplementedError`. How each is injected (traffic, harness or test setup) is still to be decided, kind by kind, as its build step lands.
+- **Affects:** platform contract v1 to v2 (`docs/modules.md` §4); `capture`, `transmit`, `eventlog`, `store` and `rawcap` call `platform.fault()` (a rule in each contract; their inputs, outputs and errors are unchanged, so their versions stay v1); `docs/modules.md` §5 (injection points); `docs/test-plan.md` §3 and §4; `docs/porting.md` §3.
+- **Docs updated in the same change:** `docs/modules.md`, `docs/porting.md`, `docs/test-plan.md`.
+- **Tests:** `test_PLT_2_fault_op_raises_each_planned_kind_on_its_operations`, `test_LOG_22_card_removed_fault_window_ends_after_for_s`, `test_LOG_22_fault_ops_arg_narrows_the_operations`, `test_LOG_3_slow_sync_fault_delays_card_sync_by_s`, `test_LOG_5_state_unwritable_fault_hits_flash_only`, `test_PLT_2_fault_plan_refuses_kinds_without_a_delivery_path`, `test_SC_6_platform_protocol_has_exactly_the_nine_functions`.
 
 ## DC-4 — Ownership of the test harness, component and replay tests and bench procedures  (accepted, 2026-11-09)
 - **Raised by:** Claude, test plan review (test plan v2)

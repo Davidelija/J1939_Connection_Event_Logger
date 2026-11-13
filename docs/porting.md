@@ -23,14 +23,15 @@ Copy `platform/desktop.py` (the vcan reference) or `platform/beacon.py` and impl
 
 | Function | What it must do | Requirements |
 | --- | --- | --- |
-| `open_can(listen_only)` | Open a raw CAN socket (`AF_CAN`, `CAN_RAW`) in listen-only or normal mode, with termination off, kernel receive timestamps (`SO_TIMESTAMP`), the per-socket drop count (`SO_RXQ_OVFL`) and a large receive buffer (`SO_RCVBUFFORCE`, size read back). `python-can` may be used here instead, for hardware without SocketCAN | PLT-2, NP-1, NP-2, HW-2, LOG-15 |
+| `open_can(listen_only)` | Open a raw CAN socket (`AF_CAN`, `CAN_RAW`) in listen-only or normal mode, with termination off, kernel receive timestamps (`SO_TIMESTAMP`), the per-socket drop count (`SO_RXQ_OVFL`), error frames and the logger's own frames delivered. `capture` sets the receive buffer size itself, and switches mode by closing the socket and opening it again (DC-6). `python-can` may be used here instead, for hardware without SocketCAN | PLT-2, NP-1, NP-2, HW-2, LOG-15 |
 | `bitrate_check()` | Confirm 250 or 500 kbit/s from clean received frames while listen-only | SC-2, NP-1 |
 | `set_light(pattern)` | Show steady, slow blink or fast blink on the one indicator | STS-1, PLT-8 |
-| `now()` | Return wall-clock time with its source (real-time clock, vehicle offset, or time since wake) and monotonic time for timers | LOG-16 |
+| `now()` | Return monotonic time for timers and, when the real-time clock is valid, wall-clock time with source `rtc`; otherwise no wall time and source `elapsed` (time since wake). The vehicle-time offset is kept by `clock`, not here (DC-6) | LOG-16 |
 | `rtc_ok()` | Report whether the real-time clock is valid | HW-7, PLT-3 |
 | `on_wake()` | Report wake and ready times | HW-8 |
 | `watchdog_kick()` | Notify the systemd watchdog | STS-18 |
 | `paths()` | Give the card, internal flash and key locations | LOG-11, LAP-8 |
+| `fault(op)` | Do nothing. On the desktop it raises the fault plan's socket and storage faults; the logger calls it before each receive, send, card write, card sync and flash write (DC-5) | LOG-22, NP-18 |
 
 Hardening (STS-20) is an install procedure in `release/` (`install.sh` and the install checklist), not a platform function. *(Function details are fixed in build step 1 and updated here if they change.)*
 

@@ -11,8 +11,7 @@ is the test seam for the platform contract (docs/modules.md section 4):
   docs/errors.md. Each entry is ``(at_mono, kind, args)`` with ``args`` a
   mapping or None.
 
-Fault delivery in this version (see docs/design-changes.md,
-DC-new-20261113-fault-delivery, for the kinds not delivered yet):
+Fault delivery (docs/design-changes.md, DC-5):
 
 * ``can_missing``: ``open_can()`` raises ``PlatformError("can_missing")``.
 * ``no_bitrate``: ``bitrate_check()`` returns None.
@@ -23,10 +22,32 @@ DC-new-20261113-fault-delivery, for the kinds not delivered yet):
   for the rest of the run when ``for_s`` is not given.
 * ``clock_jump``: the ``FakeClock``'s wall time jumps by ``args["s"]``
   seconds when its monotonic time reaches ``at_mono``. Needs a ``FakeClock``.
+* Socket and storage errors, through ``fault(op)``, which layer 1 modules call
+  just before each operation in ``FAULT_OPS``. While the fault is active,
+  ``fault(op)`` raises ``PlatformError(kind)`` for the operations below
+  (``args["ops"]`` narrows them):
 
-Any other kind from docs/errors.md raises ``NotImplementedError`` when the
-plan is built, so a test never believes a fault was injected when it was not.
-An unknown kind raises ``ValueError``.
+  ==================  =================================
+  kind                operations
+  ==================  =================================
+  ``can_down``        ``can_recv``, ``can_send``
+  ``enobufs``         ``can_send``
+  ``enospc``          ``card_write``
+  ``erofs``           ``card_write``
+  ``eio``             ``card_write``, ``card_sync``
+  ``card_removed``    ``card_write``, ``card_sync``
+  ``state_unwritable`` ``flash_write``
+  ``slow_sync``       ``card_sync`` (delays by ``args["s"]`` seconds instead of raising)
+  ==================  =================================
+
+  These are active from ``at_mono`` for ``args["for_s"]`` seconds, or for the
+  rest of the run, like the three above.
+
+The other kinds in docs/errors.md are bus traffic, file contents, service
+events or laptop-side conditions, not platform faults; DC-5 leaves how they
+are injected open. A plan naming one of them raises ``NotImplementedError``
+when it is built, so a test never believes a fault was injected when it was
+not. An unknown kind raises ``ValueError``.
 
 Hardware notes for ``vcan0``: listen-only mode is a no-op (hand-off, open
 checks) and there is no bit rate, so ``bitrate_check()`` returns the
@@ -43,16 +64,29 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from j1939logger.platform.interface import FAULT_KINDS, LIGHT_PATTERNS, Paths
+from j1939logger.platform.interface import FAULT_KINDS, FAULT_OPS, LIGHT_PATTERNS, Paths
 from j1939logger.types import ClockReading, PlatformError
 
-__all__ = ["DesktopPlatform", "FakeClock", "FaultSpec", "DELIVERED_FAULT_KINDS"]
+__all__ = ["DesktopPlatform", "FakeClock", "FaultSpec", "DELIVERED_FAULT_KINDS", "OPS_BY_KIND"]
 
 FaultSpec = tuple[float, str, Optional[Mapping[str, Any]]]
 
-# Kinds this version of DesktopPlatform can inject (module docstring).
-DELIVERED_FAULT_KINDS = ("can_missing", "no_bitrate", "rtc_invalid", "clock_jump")
-_WINDOW_KINDS = ("can_missing", "no_bitrate", "rtc_invalid")
+# fault(op) kinds and the operations each one hits (module docstring, DC-5).
+OPS_BY_KIND: dict[str, tuple[str, ...]] = {
+    "can_down": ("can_recv", "can_send"),
+    "enobufs": ("can_send",),
+    "enospc": ("card_write",),
+    "erofs": ("card_write",),
+    "eio": ("card_write", "card_sync"),
+    "card_removed": ("card_write", "card_sync"),
+    "state_unwritable": ("flash_write",),
+    "slow_sync": ("card_sync",),
+}
+
+# Kinds DesktopPlatform can inject (module docstring).
+DELIVERED_FAULT_KINDS = ("can_missing", "no_bitrate", "rtc_invalid", "clock_jump") + tuple(
+    OPS_BY_KIND
+)
 
 # Linux SocketCAN constants, by value where the socket module may not name them.
 _SOL_CAN_RAW = getattr(socket, "SOL_CAN_RAW", 101)
@@ -125,10 +159,14 @@ class _HostClock:
 
 
 class _Window:
-    def __init__(self, kind: str, start: float, end: float) -> None:
+    def __init__(
+        self, kind: str, start: float, end: float, ops: tuple[str, ...] = (), delay_s: float = 0.0
+    ) -> None:
         self.kind = kind
         self.start = start
         self.end = end
+        self.ops = ops
+        self.delay_s = delay_s
 
     def active(self, mono: float) -> bool:
         return self.start <= mono < self.end
@@ -175,8 +213,8 @@ class DesktopPlatform:
                 raise ValueError(f"unknown fault kind {kind!r}; kinds come from docs/errors.md")
             if kind not in DELIVERED_FAULT_KINDS:
                 raise NotImplementedError(
-                    f"fault kind {kind!r} has no delivery path in DesktopPlatform yet "
-                    "(docs/design-changes.md, DC-new-20261113-fault-delivery)"
+                    f"fault kind {kind!r} is not injected by the platform fault plan "
+                    "(docs/design-changes.md, DC-5)"
                 )
             opts = dict(args or {})
             at = float(at_mono)
@@ -186,10 +224,20 @@ class DesktopPlatform:
                 if "s" not in opts:
                     raise ValueError("clock_jump needs args {'s': seconds}")
                 self._fake._schedule_jump(at, float(opts["s"]))
-            else:
-                for_s = opts.get("for_s")
-                end = float("inf") if for_s is None else at + float(for_s)
-                self._windows.append(_Window(kind, at, end))
+                continue
+            for_s = opts.get("for_s")
+            end = float("inf") if for_s is None else at + float(for_s)
+            ops: tuple[str, ...] = ()
+            delay_s = 0.0
+            if kind in OPS_BY_KIND:
+                ops = tuple(opts.get("ops", OPS_BY_KIND[kind]))
+                if not ops or not set(ops) <= set(OPS_BY_KIND[kind]):
+                    raise ValueError(f"{kind} applies to {OPS_BY_KIND[kind]}: {ops!r}")
+                if kind == "slow_sync":
+                    if "s" not in opts:
+                        raise ValueError("slow_sync needs args {'s': seconds}")
+                    delay_s = float(opts["s"])
+            self._windows.append(_Window(kind, at, end, ops, delay_s))
 
     def _active(self, kind: str) -> bool:
         mono = self._clock.mono()
@@ -248,3 +296,20 @@ class DesktopPlatform:
 
     def paths(self) -> Paths:
         return self._paths
+
+    def fault(self, op: str) -> None:
+        if op not in FAULT_OPS:
+            raise ValueError(f"operation must be one of {FAULT_OPS}: {op!r}")
+        mono = self._clock.mono()
+        for w in self._windows:
+            if op in w.ops and w.active(mono):
+                if w.kind == "slow_sync":
+                    self._delay(w.delay_s)
+                    return
+                raise PlatformError(w.kind, f"fault plan, {op}")
+
+    def _delay(self, s: float) -> None:
+        if self._fake is not None:
+            self._fake.advance(s)
+        else:
+            time.sleep(s)

@@ -9,7 +9,13 @@ import j1939logger.platform.desktop as desktop
 import j1939logger.platform.interface as interface
 import j1939logger.types as types
 from j1939logger.platform.desktop import DesktopPlatform, FakeClock
-from j1939logger.platform.interface import FAULT_KINDS, LIGHT_PATTERNS, Paths, Platform
+from j1939logger.platform.interface import (
+    FAULT_KINDS,
+    FAULT_OPS,
+    LIGHT_PATTERNS,
+    Paths,
+    Platform,
+)
 from j1939logger.types import (
     ClockReading,
     Connection,
@@ -68,17 +74,20 @@ def test_SC_6_platform_error_carries_kind() -> None:
 
 
 def test_SC_6_platform_interface_exports_exactly_the_contract_names() -> None:
-    assert set(interface.__all__) == {"Platform", "Paths", "LIGHT_PATTERNS", "FAULT_KINDS"}
+    assert set(interface.__all__) == {
+        "Platform", "Paths", "LIGHT_PATTERNS", "FAULT_KINDS", "FAULT_OPS",
+    }  # fmt: skip
+    assert FAULT_OPS == ("can_recv", "can_send", "card_write", "card_sync", "flash_write")
     assert LIGHT_PATTERNS == ("steady", "slow", "fast", "off")
     assert [f.name for f in dataclasses.fields(Paths)] == ["card", "flash", "keys"]
     assert len(set(FAULT_KINDS)) == len(FAULT_KINDS)
 
 
-def test_SC_6_platform_protocol_has_exactly_the_eight_functions() -> None:
+def test_SC_6_platform_protocol_has_exactly_the_nine_functions() -> None:
     members = {n for n in vars(Platform) if not n.startswith("_")}
     assert members == {
         "open_can", "bitrate_check", "set_light", "now", "rtc_ok", "on_wake",
-        "watchdog_kick", "paths",
+        "watchdog_kick", "paths", "fault",
     }  # fmt: skip
 
 

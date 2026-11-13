@@ -15,11 +15,12 @@ import pytest
 
 from j1939logger.platform.desktop import (
     DELIVERED_FAULT_KINDS,
+    OPS_BY_KIND,
     DesktopPlatform,
     FakeClock,
     FaultSpec,
 )
-from j1939logger.platform.interface import FAULT_KINDS, LIGHT_PATTERNS
+from j1939logger.platform.interface import FAULT_KINDS, FAULT_OPS, LIGHT_PATTERNS
 from j1939logger.types import PlatformError
 
 START = datetime(2026, 11, 6, 14, 2, 11, tzinfo=timezone.utc)
@@ -230,11 +231,74 @@ def test_PLT_2_fault_plan_rejects_malformed_entry(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", [k for k in FAULT_KINDS if k not in DELIVERED_FAULT_KINDS])
 def test_PLT_2_fault_plan_refuses_kinds_without_a_delivery_path(tmp_path: Path, kind: str) -> None:
-    # Delivery for these kinds waits on DC-new-20261113-fault-delivery; refusing
-    # them stops a test from believing a fault was injected when it was not.
-    with pytest.raises(NotImplementedError, match="DC-new-20261113-fault-delivery"):
+    # DC-5 leaves these kinds to other injection points; refusing them stops a
+    # test from believing a fault was injected when it was not.
+    with pytest.raises(NotImplementedError, match="DC-5"):
         make(tmp_path, [(1.0, kind, None)])
 
 
 def test_PLT_2_delivered_kinds_are_spelled_as_in_errors_md() -> None:
     assert set(DELIVERED_FAULT_KINDS) <= set(FAULT_KINDS)
+
+
+# -- fault(op): socket and storage errors (DC-5) ------------------------------
+
+
+@pytest.mark.parametrize("kind", [k for k in OPS_BY_KIND if k != "slow_sync"])
+def test_PLT_2_fault_op_raises_each_planned_kind_on_its_operations(
+    tmp_path: Path, kind: str
+) -> None:
+    p, clock = make(tmp_path, [(110.0, kind, None)])
+    for op in FAULT_OPS:
+        p.fault(op)  # not active yet: nothing raised
+    clock.advance(10.0)
+    for op in FAULT_OPS:
+        if op in OPS_BY_KIND[kind]:
+            with pytest.raises(PlatformError) as exc:
+                p.fault(op)
+            assert exc.value.kind == kind
+        else:
+            p.fault(op)
+
+
+def test_LOG_22_card_removed_fault_window_ends_after_for_s(tmp_path: Path) -> None:
+    p, clock = make(tmp_path, [(100.0, "card_removed", {"for_s": 2.0})])
+    with pytest.raises(PlatformError):
+        p.fault("card_write")
+    clock.advance(2.0)
+    p.fault("card_write")  # card reinserted
+
+
+def test_LOG_22_fault_ops_arg_narrows_the_operations(tmp_path: Path) -> None:
+    p, _ = make(tmp_path, [(100.0, "eio", {"ops": ["card_sync"]})])
+    p.fault("card_write")
+    with pytest.raises(PlatformError):
+        p.fault("card_sync")
+    with pytest.raises(ValueError):
+        make(tmp_path, [(100.0, "eio", {"ops": ["can_send"]})])
+
+
+def test_LOG_3_slow_sync_fault_delays_card_sync_by_s(tmp_path: Path) -> None:
+    p, clock = make(tmp_path, [(100.0, "slow_sync", {"s": 3.5, "for_s": 1.0})])
+    p.fault("card_write")
+    assert clock.mono() == 100.0
+    p.fault("card_sync")
+    assert clock.mono() == pytest.approx(103.5)
+    p.fault("card_sync")  # window over
+    assert clock.mono() == pytest.approx(103.5)
+    with pytest.raises(ValueError):
+        make(tmp_path, [(1.0, "slow_sync", None)])
+
+
+def test_LOG_5_state_unwritable_fault_hits_flash_only(tmp_path: Path) -> None:
+    p, _ = make(tmp_path, [(100.0, "state_unwritable", None)])
+    p.fault("card_write")
+    with pytest.raises(PlatformError) as exc:
+        p.fault("flash_write")
+    assert exc.value.kind == "state_unwritable"
+
+
+def test_PLT_2_fault_rejects_unknown_operation(tmp_path: Path) -> None:
+    p, _ = make(tmp_path)
+    with pytest.raises(ValueError):
+        p.fault("card_read")

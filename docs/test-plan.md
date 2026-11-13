@@ -39,7 +39,7 @@ The levels are the ones in `docs/modules.md` §5. Each uses only its listed entr
 
 **Why time-based tests are component tests:** `canplayer` plays in real time, so a 24 h roll-over over replay takes 24 h. At level 2 the fixture's frames are fed in-process and `FakeClock` is advanced, so the same scenario runs in seconds. Replay is kept for what genuinely needs a bus.
 
-**Tooling (pinned by version and hash in `pyproject.toml`):**
+**Tooling (pinned by version in `pyproject.toml` and by hash in `requirements/dev.txt`, DC-6):**
 
 - **Python 3.9** in CI and on the desktop (DC-1), until build step 2a confirms the Beacon's version.
 - **pytest** for levels 1 to 3, with markers `unit`, `contract`, `malformed`, `component`, `replay` and `slow`.
@@ -63,7 +63,7 @@ The levels are the ones in `docs/modules.md` §5. Each uses only its listed entr
 **Injection points** (the only ways a test reaches inside):
 
 - Time: `FakeClock` (`advance`, `jump`).
-- Faults: `DesktopPlatform(fault_plan=[(at_mono, kind, args)])`, using `docs/errors.md` kind spellings (for example `card_removed`, `bus_off`, `state_corrupt`, `name_collision`).
+- Faults: `DesktopPlatform(fault_plan=[(at_mono, kind, args)])`, using `docs/errors.md` kind spellings. The plan delivers `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `platform.fault(op)` the socket and storage errors `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync` (DC-5). Other kinds (for example `bus_off`, `state_corrupt`, `name_collision`) come from traffic, the harness or test setup.
 - Commands: the `cmdserver` socket at level 2; `j1939cmd` at level 3.
 
 There is no separate fakes module: `FakeClock` and `DesktopPlatform` are the interface code merged first in build step 1.
@@ -87,7 +87,7 @@ There is no separate fakes module: `FakeClock` and `DesktopPlatform` are the int
 
 Section 4's unit cases are the checklist developers must cover; test-script writers check them in review but don't write them.
 
-**Naming:** every test name starts with the requirement ID it verifies (`test_DET_4_copied_name_raises_conflict`); a fixture's `requirements` list ties it to the verification matrix.
+**Naming:** every test name starts with the requirement ID it verifies (`test_DET_4_copied_name_raises_conflict`); tests of project tooling start with the DC ID that defines the tool (`test_DC_2_...`, DC-6); a fixture's `requirements` list ties it to the verification matrix.
 
 ## 4. Unit, contract and malformed-input tests (level 1)
 
@@ -113,7 +113,7 @@ Written against the contract frozen for the build step (`docs/modules.md` §6). 
 | `retention` | 6 | Removal order; never session files; reserve kept; nearly full is notice, full is high | LOG-11, LOG-22 |
 | `status` | 7 | Light priority table (fast > slow > steady; off while starting); VIN mismatch, transmit off and restart loop give fast blink; status file fields | STS-1 to STS-3 |
 | `cmdserver` | 7 | Protocol version checked; unknown command and bad arguments refused with a reason; one command at a time; never changes state itself | STS-23 |
-| `platform` (desktop) | 1 | Every kind in `docs/errors.md` can be raised from the fault plan; `FakeClock` drives `now()` | PLT-2 (desktop half), STS-18 |
+| `platform` (desktop) | 1 | Every kind the fault plan delivers (DC-5) is raised at the right call, inside its window and not outside it; other kinds are refused; `FakeClock` drives `now()` | PLT-2 (desktop half), STS-18 |
 
 `session`, `admin`, `j1939cmd` and `j1939ctl` are tested at levels 2 and 3 (their contracts name those seams).
 
@@ -346,7 +346,7 @@ The full matrix stays in `docs/verification.md`. Counts exclude Deferred require
 | 7 | STS-9, STS-11, STS-12, STS-17, STS-23, LAP-4, LAP-5, LAP-6, LAP-8, LAP-9, LAP-11 |
 | 8 (bench) | SC-1, SC-4, SC-9, SC-10, SC-11, STS-20, HW-1, HW-3, HW-6, HW-7, HW-8, PLT-2, PLT-3, PLT-8 |
 
-Total 95. LOG-15 sits at step 2 because its full check (buffer size in `session_start`, kernel drops in `session_end`) needs `session`; the step 1 `capture` stats unit test covers the reading side earlier. Some requirements also get a bench check after their vcan test: HW-7 (step 8) has an earlier clock test, and STS-18 (step 2) also runs in A8. The bench result is still required for HW-7.
+Total 95. SC-2 sits at step 3 because its full check needs the bit-rate logic; the step 1 `capture` test covers the reading side earlier (DC-6). LOG-15 sits at step 2 because its full check (buffer size in `session_start`, kernel drops in `session_end`) needs `session`; the step 1 `capture` stats unit test covers the reading side earlier. Some requirements also get a bench check after their vcan test: HW-7 (step 8) has an earlier clock test, and STS-18 (step 2) also runs in A8. The bench result is still required for HW-7.
 
 **IDN-4** is verified by T, A (DC-3): unit known answers, DID-20, DID-34, DID-35, DID-37 and DID-38.
 

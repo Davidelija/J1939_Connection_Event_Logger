@@ -1,10 +1,11 @@
-"""The platform functions (docs/modules.md section 4, platform contract v1).
+"""The platform functions (docs/modules.md section 4, platform contract v2, DC-5).
 
 Every hardware implementation (desktop ``vcan0``, DG Beacon, a backup board)
-provides these eight functions; everything else in the logger reaches the
+provides these nine functions; everything else in the logger reaches the
 hardware only through them (CLAUDE.md rule 12, docs/porting.md section 3).
 Implementations raise only ``PlatformError`` with a ``kind`` from
-``FAULT_KINDS``.
+``FAULT_KINDS``; a bad argument (an unknown light pattern or operation) is a
+programming error and raises ``ValueError`` (DC-6).
 """
 
 from __future__ import annotations
@@ -16,10 +17,19 @@ from typing import Optional, Protocol, runtime_checkable
 
 from j1939logger.types import ClockReading
 
-__all__ = ["Platform", "Paths", "LIGHT_PATTERNS", "FAULT_KINDS"]
+__all__ = ["Platform", "Paths", "LIGHT_PATTERNS", "FAULT_KINDS", "FAULT_OPS"]
 
 # set_light() patterns (STS-1): steady, slow blink, fast blink, off.
 LIGHT_PATTERNS = ("steady", "slow", "fast", "off")
+
+# fault(op) operations (DC-5). Layer 1 modules call platform.fault(op) just
+# before each such operation:
+#   can_recv     capture, before each recvmsg on the CAN socket
+#   can_send     transmit, before each send on the CAN socket
+#   card_write   eventlog, store and rawcap, before each write to the card
+#   card_sync    eventlog and store, before each fsync of a card file or directory
+#   flash_write  store, before each write of state.json to internal flash
+FAULT_OPS = ("can_recv", "can_send", "card_write", "card_sync", "flash_write")
 
 # The Kind column of docs/errors.md, in table order. That column is the single
 # list of fault kinds; tests/contract checks that this tuple matches it exactly.
@@ -117,4 +127,13 @@ class Platform(Protocol):
 
     def paths(self) -> Paths:
         """Card, internal flash and key locations."""
+        ...
+
+    def fault(self, op: str) -> None:
+        """Called just before an operation in FAULT_OPS (DC-5).
+
+        Raises ``PlatformError`` when an injected fault is due for ``op``, or
+        delays the call for ``slow_sync`` (the desktop fault plan); hardware
+        implementations do nothing.
+        """
         ...

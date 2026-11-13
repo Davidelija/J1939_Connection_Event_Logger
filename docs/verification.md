@@ -158,7 +158,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | HW-9 | I | 8 |  |  |  |  |  |
 | HW-10 | I | 8 |  |  |  |  |  |
 | PLT-1 | I | 2a |  |  |  |  |  |
-| PLT-2 | T | 8 | `test_PLT_2_open_can_*` (vcan0), `test_PLT_2_fault_plan_*` | vcan | partial: desktop half (kernel timestamps, own frames); controller features on hardware in B-PLT2, step 8 | 2026-11-13 | CI, PR step-1-interfaces |
+| PLT-2 | T | 8 | `test_PLT_2_open_can_*` (vcan0), `test_PLT_2_fault_plan_*`, `test_PLT_2_fault_op_*` | vcan | partial: desktop half (kernel timestamps, own frames); controller features on hardware in B-PLT2, step 8 | 2026-11-13 | CI, PR step-1-interfaces |
 | PLT-3 | I, T | 8 |  |  |  |  |  |
 | PLT-4 | T | — | Deferred, not built |  |  |  |  |
 | PLT-5 | I | 8 | `test_PLT_5_paths_*` | vcan | partial: desktop `paths()` keeps card, flash and keys apart; ext4 check in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
