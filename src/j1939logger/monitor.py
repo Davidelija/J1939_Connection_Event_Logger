@@ -458,6 +458,10 @@ class Monitor:
             del self._open_etp[k]
         return out
 
+    def drop_inventory(self) -> None:
+        """No inventory entry is known for the rest of the session (v1.3, DC-20)."""
+        self._inventory = None
+
     def requested_pgns(self, conn: int) -> frozenset[int]:
         """The distinct PGNs connection ``conn`` has requested, for identify (v1.2, DC-17)."""
         act = self._act.get(conn)
