@@ -58,7 +58,11 @@ class _IdleSocket:
 
     def settimeout(self, t: float) -> None: ...
     def recvmsg(self, *a: Any) -> Any:
+        time.sleep(0.005)  # like a real socket timeout, without spinning the CPU
         raise socket.timeout()
+
+    def send(self, data: bytes) -> int:
+        return len(data)
 
     def close(self) -> None: ...
 

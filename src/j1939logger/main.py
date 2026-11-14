@@ -58,18 +58,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     settings = dict(cfg.values)
     inventory = None
     inventory_version = None
+    inventory_vin = None
+    addresses: list[int] = []
     startup_faults = []
     if args.inventory is not None:
         try:
             data = json.loads(args.inventory.read_text(encoding="utf-8"))
             inventory = inventory_from_file(data)
-            inventory_version = data.get("inventory")
+            checked = validate_inventory(data)
+            assert not isinstance(checked, InventoryError)
+            inventory_version = checked.version
+            inventory_vin = checked.vin
+            addresses = [a for e in checked.entries for a in e.addresses]
         except (OSError, ValueError) as exc:
             # A corrupt inventory runs the logger untrained with a high fault (STS-19).
             startup_faults.append(f"inventory corrupt ({exc}); running untrained")
     platform = DesktopPlatform(interface=args.interface, root=args.root)
     versions = {"config": cfg.version, "inventory": inventory_version, "library": None}
-    session = Session(platform, settings, inventory, versions, startup_faults)
+    session = Session(
+        platform, settings, inventory, versions, startup_faults, addresses, inventory_vin
+    )
     signal.signal(signal.SIGINT, lambda *_: session.stop())
     signal.signal(signal.SIGTERM, lambda *_: session.stop())
     try:

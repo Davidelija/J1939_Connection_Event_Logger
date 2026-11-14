@@ -29,7 +29,11 @@ class _IdleSocket:
 
     def settimeout(self, t: float) -> None: ...
     def recvmsg(self, *a: Any) -> Any:
+        time.sleep(0.005)  # like a real socket timeout, without spinning the CPU
         raise socket.timeout()
+
+    def send(self, data: bytes) -> int:
+        return len(data)
 
     def close(self) -> None: ...
 
@@ -116,7 +120,7 @@ def test_LOG_6_session_start_header_has_every_field(tmp_path: Path) -> None:
     assert (first["format"], first["session"], first["part"]) == ("log-1", 1, 1)
     assert (first["config"], first["vin_status"], first["wake"]) == (
         "cfg-v3",
-        "unavailable",
+        "pending",
         "power-on",
     )
     assert first["logger_name"] == "0x9FFEFFFFFFE00001" and first["connector"] == "9-pin black"
@@ -207,6 +211,7 @@ def test_LOG_12_power_loss_reports_bytes_cut_off_and_chain_continues(tmp_path: P
 def test_LOG_18_software_restart_cause_from_the_diagnostic_log(tmp_path: Path) -> None:
     s, fc, _ = make(tmp_path)
     s.start()
+    feed(s, fc, 2)  # the header is written once the claim settles
     s.diag.restart_cause("software restart")
     s.capture.stop()
     assert s.eventlog is not None
@@ -339,9 +344,33 @@ def test_LOG_3_sync_thread_syncs_every_interval(
 ) -> None:
     synced: list[int] = []
     monkeypatch.setattr(os, "fsync", lambda fd: synced.append(fd))
-    s, _, _ = make(tmp_path, overrides={"logging.sync_interval_s": 0.02})
+    s, fc, _ = make(tmp_path, overrides={"logging.sync_interval_s": 0.02})
     s.start()
+    feed(s, fc, 2)  # the header is written once the claim settles
     before = len(synced)
     time.sleep(0.2)
     assert len(synced) - before >= 3
     stop(s)
+
+
+def test_LOG_5_crash_before_the_header_continues_the_chain_from_the_older_file(
+    tmp_path: Path,
+) -> None:
+    s, fc, _ = make(tmp_path)
+    s.start()
+    feed(s, fc, 2)
+    stop(s)
+    last = all_records(tmp_path)[-1]["hash"]
+    s2, _, _ = make(tmp_path, fc=fc)
+    s2.start()  # power lost before the header settled: session 2 file is empty
+    s2.capture.stop()
+    assert s2.eventlog is not None
+    s2.eventlog.close()
+    s3, _, _ = make(tmp_path, fc=fc)
+    s3.start()
+    stop(s3)
+    files = session_files(tmp_path / "card" / "sessions")
+    assert [f.session for f in files] == [1, 3]  # session 2 never wrote a record
+    third = recs(files[-1].path)[0]
+    assert (third["session"], third["prev"]) == (3, last)  # the chain continues
+    verify(all_records(tmp_path))
