@@ -195,14 +195,14 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Rules:** 1.25 s timeout, one retry; addresses already held by a known NAME are not asked again.
 - **Config:** `requests.*`. **Requirements:** NP-11 to NP-14, DET-14. **Test seam:** messages plus clock in, `TxRequest`s and outcomes out.
 
-### detect  (v1, layer 3)
+### detect  (v1, layer 3) — frozen for step 4
 - **Purpose:** decide when a device connects, moves or ends.
 - **Inputs:** `J1939Msg`; the inventory; the first-sweep signal from `requests`; `FakeClock` time.
 - **Outputs:** `Connection` objects (opened, updated, closed); `Record`s: `connection_start` (flagged for immediate sync), `connection_end`, `address_change`, `address_conflict` (including same NAME at two addresses); the session's address-to-NAME map for other modules.
 - **Rules:** keyed by NAME, or by SA for a device that never claims; first-sweep wait (`detection.first_sweep_wait_s` when no sweep can be sent); move grace; 60 s silence end.
 - **Config:** `detection.silence_end_s`, `detection.move_grace_s`, `detection.first_sweep_wait_s`, `limits.*`. **Requirements:** DET-1 to DET-6, DET-15 to DET-17. **Test seam:** message list plus inventory plus clock in, records out; the X42 fixtures.
 
-### monitor  (v1, layer 3)
+### monitor  (v1, layer 3) — frozen for step 4
 - **Purpose:** what each connected device does.
 - **Inputs:** `J1939Msg` with its `Connection`; the inventory's PGNs per NAME.
 - **Outputs:** per-connection PGN table, first `detection.requests_kept` requests, DM activity, ETP transfers (fields for `connection_end`); `control_flag` and `known_device_new_pgn` `Record`s; a raw-capture trigger to `rawcap`.
@@ -358,7 +358,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 | 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` — **frozen 2026-11-13** |
 | 2a. Beacon go/no-go | none (no code) |
 | 3. Transmit | `transmit`, `address`, `requests` — **frozen 2026-11-13** |
-| 4. Detection | `detect`, `monitor` |
+| 4. Detection | `detect`, `monitor` — **frozen 2026-11-14** |
 | 5. Identification | `identify` |
 | 6. Training and inventory | `inventory`, `rawcap`, `retention` |
 | 7. Laptop tool | `cmdserver`, `j1939cmd`, `j1939ctl`, `admin`, `status` |
