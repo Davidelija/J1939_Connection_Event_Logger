@@ -52,7 +52,7 @@ from typing import Any, Optional
 
 from j1939logger.clock import Clock
 from j1939logger.config import Inventory, InventoryEntry
-from j1939logger.decode import PGN_ETP_CM, PGN_ETP_DT, PGN_REQUEST
+from j1939logger.decode import PGN_ADDRESS_CLAIM, PGN_ETP_CM, PGN_ETP_DT, PGN_REQUEST
 from j1939logger.eventlog import format_utc
 from j1939logger.types import Connection, J1939Msg, Record
 
@@ -354,7 +354,9 @@ class Monitor:
         if not self._new_pgn_on:
             return []
         sent, req = self._known_sets(entry)
-        checks = [] if msg.pgn == PGN_ETP_DT else [(msg.pgn, "sent", sent)]
+        # The address claim is how the entry's NAME was learned, so training saw it.
+        skip = msg.pgn in (PGN_ETP_DT, PGN_ADDRESS_CLAIM)
+        checks = [] if skip else [(msg.pgn, "sent", sent)]
         if requested is not None and entry.category == APPROVED:
             checks.append((requested, "requested", req))
         out = []

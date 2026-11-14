@@ -190,6 +190,12 @@ def test_DET_12_known_name_sending_an_untrained_pgn_once_per_session(tmp_path: P
     assert m.on_message(msg(65132, sa=0, t=200.0), None, e01) == []
 
 
+def test_DET_12_address_claim_is_never_a_new_pgn(tmp_path: Path) -> None:
+    m = make(tmp_path)
+    claim = msg(60928, sa=0, data=(0x2E412A10).to_bytes(8, "little"))
+    assert m.on_message(claim, None, entry("E01")) == []  # E01's trained set lists data PGNs
+
+
 def test_DET_12_approved_device_requesting_outside_its_trained_set(tmp_path: Path) -> None:
     m = make(tmp_path)
     e04 = entry("E04")
@@ -238,4 +244,4 @@ def test_DET_7_summary_matches_the_example_connection_end_fields(tmp_path: Path)
     keys = set(m.summary(2))
     example = {k for k in end if k in keys or k in {"pgns_sent", "dm_types", "new_pgns"}}
     assert example <= keys  # every activity field in the example is produced
-    assert keys - set(end) == {"pgns_dropped"}  # added by DC-13
+    assert keys == {k for k in end if k in keys}  # the example has every field (DC-15)

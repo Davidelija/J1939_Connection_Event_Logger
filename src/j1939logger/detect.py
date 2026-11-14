@@ -513,9 +513,14 @@ class Detect:
                     out.append(self._end(conn, "silence", self._last_bus))
         return out
 
-    def end_all(self, reason: str) -> list[Record]:
-        """End every open connection, for example at key-off (DET-6)."""
-        now = self._last_bus if self._last_bus is not None else 0.0
+    def end_all(self, reason: str, now_mono: Optional[float] = None) -> list[Record]:
+        """End every open connection, for example at key-off (DET-6).
+
+        Each end time is the connection's last frame; the record time is
+        ``now_mono`` (when the end was decided), else the last frame on the bus.
+        """
+        now = now_mono if now_mono is not None else self._last_bus
+        now = now if now is not None else 0.0
         return [self._end(c, reason, max(now, c.last_mono)) for c in list(self._open.values())]
 
     def _end(self, conn: Connection, reason: str, at: float) -> Record:
