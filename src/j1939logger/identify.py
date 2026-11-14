@@ -129,7 +129,7 @@ def reply_text(pgn: int, value: Optional[bytes]) -> Optional[str]:
     if value is None:
         return None
     raw = value[1:] if pgn == PGN_SOFTWARE_ID and value else value
-    text = raw.decode("ascii", "replace").rstrip("\x00\xff� ").rstrip("*")
+    text = raw.decode("ascii", "replace").rstrip("\x00\xff\ufffd ").rstrip("*")
     return text
 
 
