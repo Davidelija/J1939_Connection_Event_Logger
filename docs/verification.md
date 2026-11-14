@@ -27,7 +27,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-10 | T | 8 |  |  |  |  |  |
 | SC-11 | T | 8 |  |  |  |  |  |
 | SC-12 | T | — | Deferred, not built |  |  |  |  |
-| SC-12a | T | 1 | `test_SC_12a_*` (tests/malformed) | vcan | partial: decode under Hypothesis; monitor joins in step 4 | 2026-11-13 | CI, PR step-1-logic |
+| SC-12a | T | 1 | `test_SC_12a_*` (tests/malformed), `test_SC_12a_monitor_never_raises_and_stays_within_the_limits` | vcan | pass on vcan: decode and monitor under Hypothesis | 2026-11-14 | CI, PR step-4-monitor |
 | NP-1 | T | 3 | `test_NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `test_NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | vcan | pass on vcan: listen-only until the bit rate is confirmed; nothing sent before; A1, A2 on hardware (step 8) | 2026-11-14 | CI, PR step-3-session |
 | NP-2 | T | 3 | `test_NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed` | vcan | pass on vcan: normal mode after confirmation; A2 on hardware | 2026-11-14 | CI, PR step-3-session |
 | NP-3 | T | 3 | `test_NP_3_*`, `test_NP_3_bus_off_turns_transmit_off_for_the_session` | vcan | pass on vcan: bus-off turns transmit off for the session, fault logged, bus_off in session_end | 2026-11-14 | CI, PR step-3-session |
@@ -41,7 +41,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-12 | T | 3 | `test_NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa`, `test_NP_12_vin_reply_gives_vin_check_match` | vcan | pass on vcan: Time/Date and VIN to requests.vin_sa; vin_check record (DC-12) | 2026-11-14 | CI, PR step-3-session |
 | NP-13 | T | 3 | `test_NP_13_known_name_is_not_asked_for_identity`, `test_NP_13_new_device_is_asked_for_its_identity` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
 | NP-14 | T | 3 | `test_NP_14_*`, `test_NP_14_no_vin_reply_gives_vin_check_unavailable` | vcan | no reply recorded in the session | 2026-11-14 | CI, PR step-3-session |
-| NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked`, `test_NP_15_frames_sent_through_the_handle_come_back_marked_own` | vcan | partial: decode marks own frames and replies; exclusion from detection in step 4; frames sent through capture's handle come back marked own (vcan0) | 2026-11-13 | CI, PR step-3-transmit |
+| NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked`, `test_NP_15_frames_sent_through_the_handle_come_back_marked_own`, `test_NP_15_own_frames_and_replies_to_the_logger_are_not_monitored` | vcan | partial: decode marks own frames and replies; monitor excludes them; detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
 | NP-16 | T | 3 | `test_NP_16_*`, `test_NP_16_witness_over_a_busy_minute` | vcan | pass on vcan: witness over a busy minute with ten new devices | 2026-11-14 | CI, PR step-3-session |
 | NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing`, `test_NP_17_interface_down_raises_can_down_from_read_batch`, `test_NP_17_can_down_fault_plan_reaches_read_batch`, `test_NP_17_missing_interface_raises_can_missing_on_start`, `test_NP_17_nothing_is_sent_before_transmit_is_enabled`, `test_NP_17_send_handle_without_a_socket_raises_can_down`, `test_NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | vcan | pass on vcan: nothing sent without a bit rate; high fault after 60 s | 2026-11-14 | CI, PR step-3-session |
 | NP-18 | T | 3 | `test_NP_18_*`, `test_NP_18_send_error_turns_transmit_off_with_a_high_fault` | vcan | pass on vcan: send error turns transmit off with a high fault | 2026-11-14 | CI, PR step-3-session |
@@ -65,19 +65,19 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-4 | T | 4 | `test_DET_4_own_claims_are_not_contests`, `test_NP_7_concedes_tries_once_more_then_cannot_claim` | vcan | partial: the logger's own claim loss is an address_conflict record; full DET-4 in step 4 | 2026-11-14 | CI, PR step-3-address-requests |
 | DET-5 | T | 4 |  |  |  |  |  |
 | DET-6 | T | 4 |  |  |  |  |  |
-| DET-7 | T | 4 |  |  |  |  |  |
-| DET-8 | T | 4 |  |  |  |  |  |
-| DET-9 | T | 4 |  |  |  |  |  |
-| DET-10 | T | 4 | `test_DET_10_etp_is_recognized_and_counted_not_reassembled` | vcan | partial: decode recognizes ETP; connection records in step 4 | 2026-11-13 | CI, PR step-1-logic |
-| DET-11 | T | 4 |  |  |  |  |  |
-| DET-12 | T | 4 |  |  |  |  |  |
+| DET-7 | T | 4 | `test_DET_7_each_pgn_with_first_last_and_count`, `test_DET_7_summary_matches_the_example_connection_end_fields` | vcan | partial: monitor keeps the PGN table and gives the connection_end fields; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-8 | T | 4 | `test_DET_8_first_requests_kept_in_order_and_the_rest_counted`, `test_DET_8_request_for_an_unnamed_pgn_has_no_name` | vcan | partial: monitor keeps the first requests and counts the rest; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-9 | T | 4 | `test_DET_9_control_pgn_requested_flags_once_with_a_running_count`, `test_DET_9_how_a_control_pgn_was_sent`, `test_DET_9_known_device_flags_only_untrained_control_pgns` | vcan | pass on vcan (monitor): control_flag at first occurrence, via and target SA (DC-13, DC-14); raw_capture null until step 6 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-10 | T | 4 | `test_DET_10_etp_is_recognized_and_counted_not_reassembled`, `test_DET_10_dm_activity_and_etp_with_the_memory_transfer_flag`, `test_DET_10_no_memory_flag_without_dm14_to_dm16` | vcan | partial: decode recognizes ETP; monitor records DM activity and ETP transfers with the memory flag; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-11 | T | 4 | `test_DET_11_proprietary_pgns_listed` | vcan | partial: monitor lists proprietary PGNs; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-12 | T | 4 | `test_DET_12_known_name_sending_an_untrained_pgn_once_per_session`, `test_DET_12_approved_device_requesting_outside_its_trained_set`, `test_DET_12_switch_off_gives_no_new_pgn_records` | vcan | pass on vcan (monitor): known_device_new_pgn once per session per NAME, PGN and direction (DC-13, DC-14); ORNL check still open | 2026-11-14 | CI, PR step-4-monitor |
 | DET-13 | T, A | 5 |  |  |  |  |  |
 | DET-14 | T | 6 |  |  |  |  |  |
 | DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection` | vcan | partial: one connection per NAME; non-claiming devices in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-16 | T | 1 | `test_DET_16_new_claim_gives_synced_chained_connection_start`, `test_DET_16_connection_start_within_2_s_on_vcan0` | vcan | pass: connection_start written and synced within 2 s of the claim on vcan0; new-device light in step 7 | 2026-11-13 | CI, PR step-1-logic |
 | DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form` | vcan | partial: info connection_start for an approved device; its end record in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-18 | T | 5 |  |  |  |  |  |
-| DET-19 | T | 1 | `test_DET_19_*` | vcan | partial: decode limits (open transfers, 1785 bytes, T1 to T4, non-J1939 counts, malformed counts); pgns_per_conn in step 4, raw_mb_per_session in step 6 | 2026-11-13 | CI, PR step-1-logic |
+| DET-19 | T | 1 | `test_DET_19_*`, `test_DET_19_pgn_table_is_bounded_and_the_rest_counted`, `test_DET_19_open_etp_transfers_are_bounded` | vcan | partial: decode limits; pgns_per_conn and open ETP transfers bounded in monitor; raw_mb_per_session in step 6 | 2026-11-14 | CI, PR step-4-monitor |
 | IDN-1 | T | 1 | `test_IDN_1_*` | vcan | pass: NAME fields decoded as raw numbers (logger NAME, session 142 scan tool) | 2026-11-13 | CI, PR step-1-logic |
 | IDN-2 | I | 5 |  |  |  |  |  |
 | IDN-3 | T, A | 5 |  |  |  |  |  |

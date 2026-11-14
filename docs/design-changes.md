@@ -31,6 +31,22 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-14 — Monitor record fields: control_flag `via` and `raw_capture`, connection_end list entries  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 4 PR 1 (`monitor`), branch `step-4-monitor`
+- **Decided by:** Vaughan Lynn, 2026-11-14 (all seven items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** how the monitor fills the fields that DC-13 and `docs/log-format.md` list but did not spell out:
+  1. `control_flag.via` (the field name in the session 142 example) takes DC-13's values: "single frame", "transport (BAM)", "transport (RTS/CTS)" or "requested". The example's `"via": "Request 59904"` becomes `"requested"`; the example chain is recomputed, as in DC-7.
+  2. `control_flag.raw_capture` is null until `rawcap` exists (step 6), and afterwards whenever no capture was written (for example, `limits.raw_mb_per_session` used up).
+  3. Each `requests_first_100` item is `"<pgn> <name> -> SA <n>"` or `"<pgn> <name> -> global"`, with the name left out for a PGN not in the logger's own short name table. The list holds up to `detection.requests_kept` items and carries no "...N more" item; the example's last item is shortened for the illustration only. `requests_dropped` counts the rest.
+  4. `etp_transfers` items: `{"sender", "destination", "pgn", "bytes", "result": "completed" | "aborted", "memory_transfer"}`. A transfer still open at connection end is reported as "aborted".
+  5. `new_pgns` items: `{"pgn", "name", "direction": "sent" | "requested"}`; `known_device_new_pgn` carries the same `direction` field.
+  6. `pgns_dropped` counts messages whose PGN was not added to the table because the table already held `limits.pgns_per_conn` PGNs.
+  7. `ecus_contacted` lists, in ascending order, every destination of a destination-specific message from the connection (not 255, and not the logger, by NP-15).
+- **Why:** these values are needed to write `monitor.summary()` and `control_flag`. DC-13 named the values but not the field shapes, and `rawcap` comes later than step 4.
+- **Affects:** DET-7 to DET-12; `monitor` v1 (no contract change: outputs as listed); `docs/log-format.md` (`control_flag`, `connection_end`, `known_device_new_pgn` field detail); `docs/examples/s000142_20261106T140211Z.jsonl` (rec 8 `via`; chain recomputed). Format stays `log-1`.
+- **Docs updated in the same change:** `docs/log-format.md`, the session 142 example, `CHANGELOG.md`.
+- **Tests:** `test_DET_7_*` to `test_DET_12_*` in `tests/unit/test_monitor.py`; Hypothesis on `monitor` (SC-12a).
+
 ## DC-13 — Step 4 freeze: connection_end writer, DET-3 connections, DET-5 evidence, ETP tracking, inventory input, control-flag fields, known-device new PGNs, silence end, moves, input limits  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 freeze pull request #13 (gaps 1 to 10)
 - **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
