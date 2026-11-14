@@ -16,7 +16,7 @@ from typing import Any, Optional, cast
 
 import pytest
 
-from j1939logger.detect import InventoryEntry
+from j1939logger.config import Inventory
 from j1939logger.main import inventory_from_file
 from j1939logger.platform.desktop import DesktopPlatform, FakeClock, FaultSpec
 from j1939logger.session import Session, session_files, settings_from_config
@@ -77,7 +77,7 @@ def settings() -> dict[str, Any]:
     return settings_from_config(json.loads((EXAMPLES / "cfg-v3.json").read_text("utf-8")))
 
 
-def inventory() -> dict[int, InventoryEntry]:
+def inventory() -> Inventory:
     return inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
 
 
@@ -91,7 +91,7 @@ def make(
     sent: list[tuple[float, int, bytes]] = []
     p = Bus(sent, rate, fault_plan=plan, clock=fc, root=root)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
-    s = Session(p, settings(), inventory(), versions, None, (0, 3, 11, 238), VIN)
+    s = Session(p, settings(), inventory(), versions, None)
     return s, fc, sent
 
 
@@ -373,7 +373,7 @@ def test_NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap(tmp_
     watch.bind(("vcan0",))
     watch.settimeout(0.05)
     platform = DesktopPlatform(interface="vcan0", root=tmp_path)
-    s = Session(platform, settings(), inventory(), None, None, (0, 3, 11, 238), VIN)
+    s = Session(platform, settings(), inventory(), None, None)
     s.start()
     runner = threading.Thread(target=s.run, daemon=True)
     runner.start()

@@ -21,6 +21,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 3. Transmit |  |  |  |  |
 | 4. Detection, freeze |  |  | To check: the contracts marked "frozen for step 4" and the gaps listed in the freeze pull request |  |
 | 4. Detection, PR 1 |  |  | To check: `monitor` against DET-7 to DET-12, DC-13 and DC-14 (control-flag `via`, known-device new PGNs, ETP tracking, bounds); the session 142 example chain recomputed for rec 8 |  |
+| 4. Detection, PR 2 |  |  | To check: `detect` against DET-1 to DET-6, DET-15 to DET-17 and DC-13 (first-sweep wait, DET-3 replies, moves and same-NAME conflicts, silence versus key-off); `session` and `main` now pass `config.Inventory` |  |
 | 4. Detection |  |  |  |  |
 | 5. Identification |  |  |  |  |
 | 6. Training and inventory |  |  |  |  |

@@ -54,8 +54,9 @@ from j1939logger.address import Address
 from j1939logger.admin import DiagLog
 from j1939logger.capture import Capture
 from j1939logger.clock import Clock
+from j1939logger.config import Inventory
 from j1939logger.decode import bus_state, decode, new_state
-from j1939logger.detect import Detect, InventoryEntry
+from j1939logger.detect import Detect
 from j1939logger.eventlog import ZERO_HASH, EventLog, format_utc, scan_tail
 from j1939logger.platform.interface import Platform
 from j1939logger.requests import PGN_VIN, RequestOutcome, Requests
@@ -127,17 +128,16 @@ class Session:
         self,
         platform: Platform,
         settings: Mapping[str, Any],
-        inventory: Optional[Mapping[int, InventoryEntry]],
+        inventory: Optional[Inventory],
         versions: Optional[Mapping[str, Optional[str]]] = None,
         startup_faults: Optional[list[str]] = None,
-        inventory_addresses: Iterable[int] = (),
-        inventory_vin: Optional[str] = None,
     ) -> None:
         self._platform = platform
         self._settings = settings
-        self._inventory = inventory
-        self._inventory_addresses = tuple(inventory_addresses)
-        self._inventory_vin = inventory_vin
+        self._inventory = inventory  # config.Inventory, or None when untrained (DC-13)
+        entries = inventory.entries if inventory is not None else ()
+        self._inventory_addresses = tuple(a for e in entries for a in e.addresses)
+        self._inventory_vin = inventory.vin if inventory is not None else None
         self._versions = dict(versions or {})
         self._startup_faults = list(startup_faults or [])
         name = settings.get("address.name", "0x9FFEFFFFFFE00001")
@@ -369,7 +369,7 @@ class Session:
                 self._log(record, msg.ts_mono)
         if self.requests is not None:
             self.requests.on_message(msg, self.logger_sa)
-        for record in self.clock.on_time_date(msg) + self.detect.on_message(msg):
+        for record in self.clock.on_time_date(msg) + self.detect.on_message(msg, self.logger_sa):
             self._log(record, msg.ts_mono)
             if record.type == "connection_start":
                 if self.eventlog is not None and not self._header_pending:
@@ -528,14 +528,12 @@ class Session:
         self.eventlog = EventLog(
             self._platform, self.clock, self._part_path(), session, self._prev_hash
         )
-        self.detect = Detect(
-            self.clock, self._inventory, float(self._settings["classify.wake_window_s"])
-        )
+        self.detect = Detect(self.clock, self._settings, self._inventory)
         self.transmit = Transmit(self._platform, self.clock, self._settings, self._logger_name)
         self.address = Address(
             self.clock, self._settings, self._logger_name, self._inventory_addresses
         )
-        known = set(self._inventory) if self._inventory is not None else set()
+        known = set(self._inventory.by_name()) if self._inventory is not None else set()
         self.requests = Requests(
             self.clock, self._settings, known, self._logger_name, self.transmit.release
         )

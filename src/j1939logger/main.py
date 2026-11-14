@@ -20,18 +20,24 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional
 
-from j1939logger.config import Config, ConfigError, InventoryError, validate, validate_inventory
-from j1939logger.detect import InventoryEntry
+from j1939logger.config import (
+    Config,
+    ConfigError,
+    Inventory,
+    InventoryError,
+    validate,
+    validate_inventory,
+)
 from j1939logger.platform.desktop import DesktopPlatform
 from j1939logger.session import Session
 
 
-def inventory_from_file(data: Any) -> dict[int, InventoryEntry]:
-    """NAME -> entry ID and category from an inventory file, validated by ``config`` (inv-1)."""
+def inventory_from_file(data: Any) -> Inventory:
+    """The inventory, validated by ``config`` (inv-1); ValueError if it is corrupt."""
     inv = validate_inventory(data)
     if isinstance(inv, InventoryError):
         raise ValueError(f"inventory rejected: {inv}")
-    return {e.name: InventoryEntry(e.entry, e.category) for e in inv.entries if e.name is not None}
+    return inv
 
 
 def config_from_file(data: Any) -> Config:
@@ -56,28 +62,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"stopped: {exc}", file=sys.stderr)  # a corrupt config stops the logger (STS-19)
         return 2
     settings = dict(cfg.values)
-    inventory = None
-    inventory_version = None
-    inventory_vin = None
-    addresses: list[int] = []
+    inventory: Optional[Inventory] = None
     startup_faults = []
     if args.inventory is not None:
         try:
-            data = json.loads(args.inventory.read_text(encoding="utf-8"))
-            inventory = inventory_from_file(data)
-            checked = validate_inventory(data)
-            assert not isinstance(checked, InventoryError)
-            inventory_version = checked.version
-            inventory_vin = checked.vin
-            addresses = [a for e in checked.entries for a in e.addresses]
+            inventory = inventory_from_file(json.loads(args.inventory.read_text(encoding="utf-8")))
         except (OSError, ValueError) as exc:
             # A corrupt inventory runs the logger untrained with a high fault (STS-19).
             startup_faults.append(f"inventory corrupt ({exc}); running untrained")
     platform = DesktopPlatform(interface=args.interface, root=args.root)
-    versions = {"config": cfg.version, "inventory": inventory_version, "library": None}
-    session = Session(
-        platform, settings, inventory, versions, startup_faults, addresses, inventory_vin
-    )
+    versions = {
+        "config": cfg.version,
+        "inventory": inventory.version if inventory is not None else None,
+        "library": None,
+    }
+    session = Session(platform, settings, inventory, versions, startup_faults)
     signal.signal(signal.SIGINT, lambda *_: session.stop())
     signal.signal(signal.SIGTERM, lambda *_: session.stop())
     try:

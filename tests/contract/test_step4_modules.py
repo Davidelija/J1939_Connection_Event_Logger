@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import inspect
 
+import j1939logger.detect as detect
 import j1939logger.monitor as monitor
+from j1939logger.detect import Detect
 from j1939logger.monitor import Monitor
 
 
@@ -15,3 +17,9 @@ def _public(cls: type) -> set[str]:
 def test_SC_6_monitor_public_names() -> None:
     assert "Monitor" in monitor.__all__
     assert {"on_message", "summary", "end"} <= _public(Monitor)
+
+
+def test_SC_6_detect_public_names() -> None:
+    assert detect.__all__ == ["Detect"]  # step 1's InventoryEntry retired (DC-13)
+    assert {"on_message", "poll", "sweep_complete", "no_sweep", "end_all"} <= _public(Detect)
+    assert {"connection_for", "entry_for", "name_at"} <= _public(Detect)

@@ -19,7 +19,7 @@ from typing import Any, cast
 
 import pytest
 
-from j1939logger.detect import InventoryEntry
+from j1939logger.config import Inventory
 from j1939logger.eventlog import ZERO_HASH, record_hash
 from j1939logger.main import inventory_from_file
 from j1939logger.platform.desktop import DesktopPlatform, FakeClock
@@ -35,7 +35,7 @@ def settings() -> dict[str, Any]:
     return settings_from_config(json.loads((EXAMPLES / "cfg-v3.json").read_text("utf-8")))
 
 
-def inventory() -> dict[int, InventoryEntry]:
+def inventory() -> Inventory:
     return inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
 
 
@@ -76,7 +76,7 @@ def test_DET_1_settings_and_inventory_come_from_the_config_files() -> None:
     s = settings()
     assert s["limits.tp_sessions"] == 32 and s["classify.wake_window_s"] == 10
     inv = inventory()
-    assert inv[0x8000FE003C04D2E8].entry == "E04"
+    assert inv.by_name()[0x8000FE003C04D2E8].entry == "E04"
     with pytest.raises(ValueError):
         settings_from_config({"can": {}})
 

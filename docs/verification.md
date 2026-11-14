@@ -59,12 +59,12 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | TRN-13 | I | 6 |  |  |  |  |  |
 | TRN-14 | T | 6 |  |  |  |  |  |
 | TRN-15 | T | 6 |  |  |  |  |  |
-| DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (step 1 minimal detect, DC-9): a NAME not in the inventory opens a connection; full detect in step 4 | 2026-11-13 | CI, PR step-1-logic |
-| DET-2 | T | 4 |  |  |  |  |  |
-| DET-3 | T | 4 |  |  |  |  |  |
-| DET-4 | T | 4 | `test_DET_4_own_claims_are_not_contests`, `test_NP_7_concedes_tries_once_more_then_cannot_claim` | vcan | partial: the logger's own claim loss is an address_conflict record; full DET-4 in step 4 | 2026-11-14 | CI, PR step-3-address-requests |
-| DET-5 | T | 4 |  |  |  |  |  |
-| DET-6 | T | 4 |  |  |  |  |  |
+| DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (detect): a NAME not in the inventory opens a connection keyed by NAME; baseline ECUs get none | 2026-11-14 | CI, PR step-4-detect |
+| DET-2 | T | 4 | `test_DET_2_*` | vcan | partial: the first-sweep wait, held addresses, hints only after a sweep, inventory matches when no sweep; detect built; wired into the session in step 4 PR 3 | 2026-11-14 | CI, PR step-4-detect |
+| DET-3 | T | 4 | `test_DET_3_*` | vcan | partial: replies to an unclaimed address open a connection; 254, 255, the logger and claimed addresses excluded; detect built; wired into the session in step 4 PR 3 | 2026-11-14 | CI, PR step-4-detect |
+| DET-4 | T | 4 | `test_DET_4_own_claims_are_not_contests`, `test_NP_7_concedes_tries_once_more_then_cannot_claim`, `test_DET_4_known_name_at_a_new_address_is_confirmed_after_the_grace`, `test_DET_4_move_to_another_known_ecus_address_is_notice`, `test_DET_4_old_address_still_sending_is_same_name_conflict`, `test_DET_4_frame_from_the_old_address_after_a_confirmed_move_conflicts`, `test_DET_4_old_address_claimed_by_another_name_is_not_a_conflict`, `test_DET_4_two_names_at_one_address` | vcan | partial: moves, same-NAME and two-NAME conflicts in detect; the logger's own claim loss in address; detect built; wired into the session in step 4 PR 3 | 2026-11-14 | CI, PR step-4-detect |
+| DET-5 | T | 4 | `test_DET_5_names_appearing_and_disappearing_between_sweeps` | vcan | pass on vcan: the sweep record names NAMEs added and missing (DC-13); detect uses the sweep only for the first-sweep wait | 2026-11-14 | CI, PR step-4-detect |
+| DET-6 | T | 4 | `test_DET_6_*` | vcan | partial: silence end while the bus is active, none when it is quiet, key-off ends all with the last frame; detect built; wired into the session in step 4 PR 3 | 2026-11-14 | CI, PR step-4-detect |
 | DET-7 | T | 4 | `test_DET_7_each_pgn_with_first_last_and_count`, `test_DET_7_summary_matches_the_example_connection_end_fields` | vcan | partial: monitor keeps the PGN table and gives the connection_end fields; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
 | DET-8 | T | 4 | `test_DET_8_first_requests_kept_in_order_and_the_rest_counted`, `test_DET_8_request_for_an_unnamed_pgn_has_no_name` | vcan | partial: monitor keeps the first requests and counts the rest; written by detect in step 4 PR 2 | 2026-11-14 | CI, PR step-4-monitor |
 | DET-9 | T | 4 | `test_DET_9_control_pgn_requested_flags_once_with_a_running_count`, `test_DET_9_how_a_control_pgn_was_sent`, `test_DET_9_known_device_flags_only_untrained_control_pgns` | vcan | pass on vcan (monitor): control_flag at first occurrence, via and target SA (DC-13, DC-14); raw_capture null until step 6 | 2026-11-14 | CI, PR step-4-monitor |
@@ -73,11 +73,11 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-12 | T | 4 | `test_DET_12_known_name_sending_an_untrained_pgn_once_per_session`, `test_DET_12_approved_device_requesting_outside_its_trained_set`, `test_DET_12_switch_off_gives_no_new_pgn_records` | vcan | pass on vcan (monitor): known_device_new_pgn once per session per NAME, PGN and direction (DC-13, DC-14); ORNL check still open | 2026-11-14 | CI, PR step-4-monitor |
 | DET-13 | T, A | 5 |  |  |  |  |  |
 | DET-14 | T | 6 |  |  |  |  |  |
-| DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection` | vcan | partial: one connection per NAME; non-claiming devices in step 4 | 2026-11-13 | CI, PR step-1-logic |
+| DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection`, `test_DET_15_non_claiming_device_that_claims_keeps_its_connection`, `test_DET_15_returning_device_starts_a_new_connection` | vcan | pass (detect): keyed by NAME, or by SA until the device claims; a returning device starts a new connection | 2026-11-14 | CI, PR step-4-detect |
 | DET-16 | T | 1 | `test_DET_16_new_claim_gives_synced_chained_connection_start`, `test_DET_16_connection_start_within_2_s_on_vcan0` | vcan | pass: connection_start written and synced within 2 s of the claim on vcan0; new-device light in step 7 | 2026-11-13 | CI, PR step-1-logic |
-| DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form` | vcan | partial: info connection_start for an approved device; its end record in step 4 | 2026-11-13 | CI, PR step-1-logic |
+| DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form`, `test_DET_6_key_off_ends_every_open_connection` | vcan | partial: info start and end for an approved device, end in the short form; detect built; wired into the session in step 4 PR 3 | 2026-11-14 | CI, PR step-4-detect |
 | DET-18 | T | 5 |  |  |  |  |  |
-| DET-19 | T | 1 | `test_DET_19_*`, `test_DET_19_pgn_table_is_bounded_and_the_rest_counted`, `test_DET_19_open_etp_transfers_are_bounded` | vcan | partial: decode limits; pgns_per_conn and open ETP transfers bounded in monitor; raw_mb_per_session in step 6 | 2026-11-14 | CI, PR step-4-monitor |
+| DET-19 | T | 1 | `test_DET_19_*`, `test_DET_19_pgn_table_is_bounded_and_the_rest_counted`, `test_DET_19_open_etp_transfers_are_bounded`, `test_DET_19_detect_never_raises_and_keeps_connections_consistent` | vcan | partial: decode limits; pgns_per_conn and open ETP transfers bounded in monitor; raw_mb_per_session in step 6 | 2026-11-14 | CI, PR step-4-detect |
 | IDN-1 | T | 1 | `test_IDN_1_*` | vcan | pass: NAME fields decoded as raw numbers (logger NAME, session 142 scan tool) | 2026-11-13 | CI, PR step-1-logic |
 | IDN-2 | I | 5 |  |  |  |  |  |
 | IDN-3 | T, A | 5 |  |  |  |  |  |
