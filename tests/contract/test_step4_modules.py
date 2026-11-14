@@ -16,10 +16,12 @@ def _public(cls: type) -> set[str]:
 
 def test_SC_6_monitor_public_names() -> None:
     assert "Monitor" in monitor.__all__
-    assert {"on_message", "summary", "end"} <= _public(Monitor)
+    assert {"on_message", "summary", "end", "table_sizes"} <= _public(Monitor)
+    assert isinstance(Monitor.open_transfers, property)  # DC-16
 
 
 def test_SC_6_detect_public_names() -> None:
     assert detect.__all__ == ["Detect"]  # step 1's InventoryEntry retired (DC-13)
     assert {"on_message", "poll", "sweep_complete", "no_sweep", "end_all"} <= _public(Detect)
     assert {"connection_for", "entry_for", "name_at"} <= _public(Detect)
+    assert isinstance(Detect.waiting, property) and isinstance(Detect.connections, property)

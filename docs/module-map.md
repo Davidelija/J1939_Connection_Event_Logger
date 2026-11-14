@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, after build step 4 (PRs #13 to #16).
+Last updated: 2026-11-14, after build step 4 (PRs #13 to #16) and DC-16.
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -49,7 +49,7 @@ flowchart TB
 | `transmit.py` | 1 | The only path to the bus. Refuses and turns transmit off for the session on any breach (PGN outside the allow-list, a request for a PGN not allowed, a claim with another NAME, anything but NACK, CTS, EOMA or Abort); at most 10 frames in any 1 s; one outstanding request per destination; protocol frames first; nothing but claims for 250 ms after a claim; off on bus-off, error-passive or a send error. | 3 | ✅ |
 | `store.py` | 1 | The only writer of supporting files (status, inventory, config, library, `state.json` on internal flash): loading the newest or a given version, atomic writes, card space, freeing raw captures only. | 2 | ✅ |
 | `rawcap.py` | 1 | Saves raw candump files from 10 s before to 60 s after each new connection or control flag, from capture's ring. | 6 | ⬜ |
-| `decode.py` | 2 | Raw frames to J1939 messages: ID split, NAME decode, multi-frame reassembly up to 1785 bytes with timeouts and limits; counts bad input and never crashes on it. Asks for CTS and EOMA for transfers to the logger, and reads bus-off and error-passive from error frames (v2). | 1, 3 | ✅ |
+| `decode.py` | 2 | Raw frames to J1939 messages: ID split, NAME decode, multi-frame reassembly up to 1785 bytes with timeouts and limits; counts bad input and never crashes on it. Asks for CTS and EOMA for transfers to the logger, and reads bus-off and error-passive from error frames (v2). Marks replies to the logger, including Acknowledgments that name it (DC-16). | 1, 3 | ✅ |
 | `config.py` | 2 | Validates the config (every key, type, allow-lists never widened, move grace at most 5 s, detection-weakening changes flagged) and the inventory and library files; refuses unknown formats. | 2 | ✅ |
 | `detect.py` | 3 | Decides when a device connects, moves or ends: connections keyed by NAME, or by address for a device that never claims; the first-sweep wait; traffic from, and replies to, unclaimed addresses; moves (`address_change`) and conflicts (`address_conflict`); silence and key-off ends with `connection_end` filled from `monitor`; the session's address-to-NAME map. Classification by wake timing until `identify` (step 5). | 1, 4 | ✅ |
 | `monitor.py` | 3 | What each connected device sends and requests: the PGN table (first, last, count, bounded), the first requests and a count of the rest, ECUs contacted, DM activity, ETP transfers with the memory-transfer flag, proprietary PGNs; `control_flag` and `known_device_new_pgn` records; `summary(conn)` gives `detect` the `connection_end` fields. Raw capture trigger in step 6. | 4, 6 | 🟡 |

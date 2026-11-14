@@ -1,4 +1,4 @@
-"""decode: raw CAN frames to J1939 messages (docs/modules.md section 4, contract v2).
+"""decode: raw CAN frames to J1939 messages (docs/modules.md section 4, contract v3).
 
 Layer 2: pure. No I/O, no clock, no threads. Time comes only from each
 frame's ``ts_mono``.
@@ -22,6 +22,10 @@ frame's ``ts_mono``.
 * Extended transport protocol (ETP, PGNs 51200 and 50944) is recognized, not
   reassembled (DET-10): its frames are returned as ordinary messages and each
   ETP.CM RTS counts in ``etp_seen``.
+* ``reply_to_logger`` (v3, DC-16) is true for a message addressed to the
+  logger's address, and for an Acknowledgment (59392) whose address byte
+  (byte 5) is the logger's: a NACK or ACK answering the logger's own request,
+  which J1939 sends to global (NP-15).
 * Malformed input is counted in ``DecodeStats.malformed`` by reason and never
   raises (SC-12a).
 * ``bus_state(frame)`` (v2, DC-12) reads bus-off and TX error-passive from an
@@ -59,6 +63,7 @@ PGN_ETP_CM = 51200
 PGN_ETP_DT = 50944
 PGN_ADDRESS_CLAIM = 60928
 PGN_REQUEST = 59904
+PGN_ACK = 59392
 
 TP_MAX_BYTES = 1785
 GLOBAL = 255
@@ -279,9 +284,16 @@ class _Run:
                 data=data,
                 via_tp=via_tp,
                 own=f.own,
-                reply_to_logger=self.logger_sa is not None and da == self.logger_sa,
+                reply_to_logger=self._to_logger(pgn, da, data),
             )
         )
+
+    def _to_logger(self, pgn: int, da: int, data: bytes) -> bool:
+        if self.logger_sa is None:
+            return False
+        if da == self.logger_sa:
+            return True
+        return pgn == PGN_ACK and len(data) >= 5 and data[4] == self.logger_sa  # DC-16
 
     def tp_cm(self, f: Frame, priority: int, sa: int, da: int) -> None:
         d = f.data

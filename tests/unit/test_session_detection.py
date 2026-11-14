@@ -193,3 +193,13 @@ def test_LOG_7_connection_records_for_new_devices_and_none_for_baseline_ecus(
     ]  # fmt: skip
     eld = next(r for r in recs if r["type"] == "connection_end" and r["sa"] == 238)
     assert eld["sev"] == "info" and "pgns_sent" not in eld  # approved: short form
+
+
+def test_NP_15_ecu_nack_to_the_logger_is_not_a_new_pgn(tmp_path: Path) -> None:
+    s, fc = make(tmp_path)
+    started(s, fc)
+    assert s.logger_sa == 247
+    nack = bytes([1, 0xFF, 0xFF, 0xFF, 247]) + (65259).to_bytes(3, "little")
+    s.capture._ingest(frame((6 << 26) | (0xE8 << 16) | (0xFF << 8) | 0, nack, fc.mono()))
+    run(s, fc, 0.5, 0)
+    assert not [r for r in records(tmp_path) if r["type"] == "known_device_new_pgn"]

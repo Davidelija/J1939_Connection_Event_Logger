@@ -70,3 +70,20 @@ def test_NP_3_bus_state_reads_bus_off_and_tx_error_passive() -> None:
     rx_passive = bytes([0, 0x10, 0, 0, 0, 0, 0, 0])
     assert bus_state(fr(0x04, rx_passive, 0.0, error=True)) is None
     assert bus_state(fr(0x0CF00400, bytes(8), 0.0)) is None
+
+
+def _nack(sa: int, requester: int, pgn: int) -> Frame:
+    data = bytes([1, 0xFF, 0xFF, 0xFF, requester]) + pgn.to_bytes(3, "little")
+    return fr(can_id(59392, sa, 255, 6), data, 0.0)
+
+
+def test_NP_15_ack_naming_the_logger_is_a_reply_to_it() -> None:
+    [msg], _, _, _ = decode([_nack(3, LOGGER, 65260)], new_state(4), LOGGER)
+    assert (msg.pgn, msg.da, msg.reply_to_logger) == (59392, 255, True)  # DC-16
+
+
+def test_NP_15_ack_naming_another_address_is_not() -> None:
+    [msg], _, _, _ = decode([_nack(3, 249, 65260)], new_state(4), LOGGER)
+    assert not msg.reply_to_logger
+    [early], _, _, _ = decode([_nack(3, LOGGER, 65260)], new_state(4), None)
+    assert not early.reply_to_logger  # no address yet

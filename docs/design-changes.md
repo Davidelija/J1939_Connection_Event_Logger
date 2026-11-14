@@ -31,6 +31,17 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-16 — Acknowledgments to the logger are replies to it; monitor and detect interfaces named  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 4 PRs #14, #15 and #16 (gaps: PR #16 gap 3, PR #14 gap 2, PR #15 gap 1)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("mark in decode" and "name them in the contracts", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. `decode` v3: `J1939Msg.reply_to_logger` is also true for an Acknowledgment (59392) whose address byte (byte 5) is the logger's address. J1939 sends a NACK or ACK to global, so before this change a vehicle ECU's NACK to one of the logger's own requests reached `detect` and `monitor` and could be logged as `known_device_new_pgn`. `requests` still reads these NACKs for its outcomes; it does not filter on `reply_to_logger`.
+  2. `monitor` v1.1 and `detect` v1.1: the public methods already built in step 4 are named in `docs/modules.md` (constructor, `on_message`, `summary`, `end`, the test seams `open_transfers` and `table_sizes`; `poll`, `sweep_complete`, `no_sweep`, `waiting`, `end_all`, `connections`, `connection_for`, `entry_for`, `name_at`). `monitor`'s rule that an address claim is never a new PGN (step 4 PR 3) is written into its contract. No behaviour change.
+- **Why:** NP-15 excludes replies to the logger from detection, and a NACK answering the logger is such a reply even though it is addressed to global. The step 4 methods were the contracts' inputs and outputs but were not named.
+- **Affects:** NP-15, DET-12; `decode` v3, `monitor` v1.1, `detect` v1.1 in `docs/modules.md`. No record or format change; format stays `log-1`.
+- **Docs updated in the same change:** `docs/modules.md`, `docs/module-map.md`, `CHANGELOG.md`.
+- **Tests:** `test_NP_15_ack_naming_the_logger_is_a_reply_to_it`, `test_NP_15_ack_naming_another_address_is_not`, `test_NP_15_ecu_nack_to_the_logger_is_not_a_new_pgn`; `test_SC_6_monitor_public_names`, `test_SC_6_detect_public_names` extended.
+
 ## DC-15 — PGNs sent count the carried PGN, not TP.CM and TP.DT  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 PR 1 (`monitor`), pull request #14 (gap 1)
 - **Decided by:** Vaughan Lynn, 2026-11-14 ("fix the example", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
