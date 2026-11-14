@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, after build step 7 (PRs #25 to #28).
+Last updated: 2026-11-14, after build step 7 (PRs #25 to #28) and DC-22.
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -72,6 +72,7 @@ flowchart TB
 | `tools/check_verification.py` | CI coverage check (DC-2): every T requirement of a merged step names an existing test; release mode also needs results and no `errors.md` placeholders. | 1 | ✅ |
 | `.github/workflows/ci.yml` | CI on every push: `vcan0`, can-utils, ruff, mypy, import-linter, pytest with coverage, the no-hardware demo, the coverage check. | 1–2 | ✅ |
 | `tools/verify_chain.py` | Standalone chain verifier: checks session files across parts and sessions, names changed and missing records, reports truncated lines, new cards and open sessions without failing, refuses unknown formats. | 2 | ✅ |
+| `tools/troubleshooting.py` | Generates the user manual's troubleshooting table from `docs/errors.md` (light, what happened, what the logger does, what to do); `--check` runs in CI and fails when the manual is out of date (DC-22). | 7 | ✅ |
 | `demo/run_demo.sh` | No-hardware demo on `vcan0`: runs the logger, replays the session 142 capture, verifies the chain and checks the scan tool's `connection_start`; also the CI smoke test. The laptop tool joins in step 7. | 2 | ✅ |
 | `src/j1939ctl/` | The operator's laptop tool (Windows, standard library, OpenSSH client): the 16 commands with one prompt pattern, plain words and exit codes; `retrieve` (VIN folder, new files only, suffix for changed content, open session cut to complete records, chain check against the kept last hash, read-only); `report` (five sections, events.csv) and `inventory show`/`export` offline. Imports only `j1939logger.config` and the chain checker. | 7 | ✅ |
 | `tools/anonymize_capture.py` | Scrubs VINs and serial numbers from rig captures before they go in `tests/fixtures/rig/`. | — | ⬜ |

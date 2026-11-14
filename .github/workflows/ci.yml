@@ -64,3 +64,6 @@ jobs:
 
       - name: Verification coverage check, staged (DC-2)
         run: python tools/check_verification.py --mode staged
+
+      - name: Troubleshooting table matches docs/errors.md (DC-22)
+        run: python tools/troubleshooting.py --check
