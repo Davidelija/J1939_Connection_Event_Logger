@@ -8,7 +8,7 @@ J1939 diagnostic-port connected-devices event logger (SYSE 549 project, Colorado
 - Module map (what each module and script is for, and its status): `docs/module-map.md`
 - Rules for Claude Code: `CLAUDE.md`
 - Licence: MIT (`LICENSE`), provided without support after the semester
-- Status: build steps 1 to 4 complete on `vcan0`: sessions and the full hash chain, the chain verifier and demo, transmitting within the allow-list and rate cap, and detection (connections, moves and conflicts, silence and key-off ends, per-device activity in `connection_end`). Next: step 2a (Beacon go/no-go) and step 5 (identification).
+- Status: build steps 1 to 5 complete on `vcan0`: sessions and the full hash chain, the chain verifier and demo, transmitting within the allow-list and rate cap, detection (connections, moves and conflicts, silence and key-off ends, per-device activity) and identification (trailer and wake-timing rules, the device library score, make, model and confidence). Next: step 2a (Beacon go/no-go) and step 6 (training and inventory).
 
 ## Development
 

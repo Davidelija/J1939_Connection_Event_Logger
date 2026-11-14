@@ -31,6 +31,15 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-19 — A corrupt device library is a high fault; identification continues without it  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 5 PR 2 (session wiring), branch `step-5-session`
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("high fault, identify without it", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** `session` loads the newest device library on the card (`library/lib-vN.json`, through `store`) at power-on and records its version in `session_start` (IDN-5). A missing library means no library matches. A library that fails `lib-1` validation gives a high `fault` "device library corrupt (reasons)" with logger action "identifying without it" in the first session; the logger keeps recording and identifies from NAME and self-reported replies only. `docs/errors.md` adds the case to the corrupt-file row.
+- **Why:** `docs/errors.md` covered a corrupt inventory or config, not the library. Detection does not depend on the library, so the logger keeps recording, and the fault is high so the operator sees it, as for a corrupt inventory.
+- **Affects:** IDN-5; `session` (library loading, contract text); `docs/errors.md` (Storage, corrupt file row). No record change; format stays `log-1`.
+- **Docs updated in the same change:** `docs/errors.md`, `docs/modules.md`, `CHANGELOG.md`.
+- **Tests:** `test_IDN_5_corrupt_library_is_a_high_fault_and_identification_continues`.
+
 ## DC-18 — Trailer devices are classified by the rule "NAME"  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 5 PR 1 (`identify`), branch `step-5-identify`
 - **Decided by:** Vaughan Lynn, 2026-11-14 ("NAME", amend the note, chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

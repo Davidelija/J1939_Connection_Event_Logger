@@ -161,6 +161,7 @@ class _Activity:
     pgns: dict[int, list[float]] = field(default_factory=dict)  # pgn -> [first, last, count]
     pgns_dropped: int = 0
     requests: list[str] = field(default_factory=list)
+    requested: set[int] = field(default_factory=set)  # distinct requested PGNs (v1.2)
     requests_dropped: int = 0
     ecus: set[int] = field(default_factory=set)
     dm_types: list[str] = field(default_factory=list)
@@ -247,6 +248,8 @@ class Monitor:
         if msg.da != 255:
             act.ecus.add(msg.da)
         if requested is not None:
+            if requested in act.requested or len(act.requested) < self._pgns_per_conn:
+                act.requested.add(requested)  # bounded like the PGN table (DET-19)
             if len(act.requests) < self._requests_kept:
                 act.requests.append(f"{_named(requested)} -> {_dest(msg.da)}")
             else:
@@ -454,6 +457,11 @@ class Monitor:
         for k in [k for k, (c, _) in self._open_etp.items() if c == conn]:
             del self._open_etp[k]
         return out
+
+    def requested_pgns(self, conn: int) -> frozenset[int]:
+        """The distinct PGNs connection ``conn`` has requested, for identify (v1.2, DC-17)."""
+        act = self._act.get(conn)
+        return frozenset(act.requested) if act is not None else frozenset()
 
     @property
     def open_transfers(self) -> int:
