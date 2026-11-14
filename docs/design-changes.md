@@ -31,6 +31,25 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-13 — Step 4 freeze: connection_end writer, DET-3 connections, DET-5 evidence, ETP tracking, inventory input, control-flag fields, known-device new PGNs, silence end, moves, input limits  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 4 freeze pull request #13 (gaps 1 to 10)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. `detect` writes `connection_end` and takes the activity fields from `monitor.summary(conn)`.
+  2. DET-3: a destination-specific message to an address no claimed NAME holds (not 254, 255, the logger's or a never-claiming inventory address) opens a connection keyed by that SA, trigger "replies sent to SA N".
+  3. DET-5: the `sweep` record from `requests` (NAMEs added and missing) is the evidence; `detect` uses the sweep only for the first-sweep wait.
+  4. `monitor` follows ETP from ETP.CM messages and records sender, destination, PGN, bytes, completed or aborted, and the memory-transfer flag.
+  5. `detect` and `monitor` take `config.Inventory` (addresses, PGNs sent, approved PGNs, trained requests); step 1's `detect.InventoryEntry` is retired.
+  6. `control_flag`: "how it was sent" is single frame, transport (BAM), transport (RTS/CTS) or requested; `target_sa` null for global; first occurrence per connection and PGN, running count in `connection_end`.
+  7. `known_device_new_pgn`: once per session per NAME (or SA), PGN and direction, count 1; behind `detection.known_device_new_pgn`.
+  8. DET-6: "silence" after `detection.silence_end_s` without frames from the connection while others arrive; key-off ends every open connection with "key-off".
+  9. DET-4 moves and same-NAME conflicts as in X42: `address_change` after `detection.move_grace_s` of silence at the old address (info, or notice for another known ECU's address), once per NAME and address; old address still sending or both answering a sweep gives `address_conflict` "same NAME at two addresses", high.
+  10. DET-8, DET-19: `pgns_dropped` after `limits.pgns_per_conn` distinct PGNs; `requests_dropped` after `detection.requests_kept`.
+- **Why:** gaps found while freezing the step 4 contracts (pull request #13).
+- **Affects:** `docs/modules.md` (`detect` and `monitor` rules; no version change: the outputs are those already listed, now defined); `docs/log-format.md` (`control_flag` values, `connection_end.pgns_dropped`); `session` passes `config.Inventory`. Format stays `log-1`.
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** written with the step 4 code (`test_DET_*`), plus Hypothesis on `monitor` (SC-12a).
+
 ## DC-12 — Step 3 freeze: transfer replies, send handle, bit rate, rate cap, outstanding requests, breach rules, bus state, restart guard, VIN check, address choice  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 3 freeze pull request #9 (gaps 1 to 10)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session, option B for the VIN; recorded by Claude Code, to be confirmed in the pull request review)
