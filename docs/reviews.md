@@ -14,6 +14,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 2. Sessions and chain, PR 3 |  |  | To check: `tools/verify_chain.py` against `docs/log-format.md` (hash rule, declared breaks, truncated lines), `demo/run_demo.sh` in CI, the user manual's demo and analyst sections; step 2 marked merged |  |
 | 2. Sessions and chain |  |  |  |  |
 | 2a. Beacon go/no-go |  |  |  |  |
+| 3. Transmit, freeze |  |  | To check: the contracts marked "frozen for step 3" (safety-critical: `transmit`) and the gaps listed in the freeze pull request |  |
 | 3. Transmit |  |  |  |  |
 | 4. Detection |  |  |  |  |
 | 5. Identification |  |  |  |  |

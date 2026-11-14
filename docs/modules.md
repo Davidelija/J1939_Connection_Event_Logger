@@ -171,21 +171,21 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Performance budget:** µs per frame at 100% load: to be measured in SC-9 and recorded here.
 - **Config:** `limits.tp_sessions`. **Requirements:** NP-9, NP-15, IDN-1, DET-10, DET-19, SC-12a. **Test seam:** pure `decode(frames, state) -> (msgs, stats, tx, state)`; property tests with Hypothesis.
 
-### transmit  (v1, layer 1)
+### transmit  (v1, layer 1) — frozen for step 3
 - **Purpose:** the only path to the bus.
 - **Inputs:** `TxRequest(pgn, da, data, kind)` (shared types, §1; DC-8) from `address`, `requests` and `decode`; `kind` is "protocol" (claim, NACK, ACK, CTS, EOMA, Abort) or "request".
 - **Outputs:** frames to `platform`; `TxResult` per request (sent, refused with reason); a `fault` `Record` and `enabled = False` for the rest of the session on any breach or unexpected error; counts for `logger_tx` in `session_end`.
 - **Rules:** allow-list (`transmit.allow_list`, `requests.allow_list`), 10 frames/s, one outstanding request per destination, protocol responses jump the queue; nothing sent before a bit rate is confirmed or while the restart guard holds; calls `platform.fault("can_send")` before each send (DC-5).
 - **Config:** `transmit.*`, `requests.allow_list`. **Requirements:** NP-3, NP-9, NP-16 to NP-19. **Test seam:** a recording socket from `DesktopPlatform`; the A3 witness test on hardware.
 
-### address  (v1, layer 3)
+### address  (v1, layer 3) — frozen for step 3
 - **Purpose:** the logger's own address claim (it always concedes).
 - **Inputs:** `J1939Msg` (Address Claim, Request for Address Claim, requests addressed to the logger); the inventory's addresses; the session's claimed addresses (from `detect`).
 - **Outputs:** `TxRequest`s (claim, Cannot Claim, answer to Request for Address Claim, NACK); the logger's current address or None; `address_conflict` `Record` when it loses its claim.
 - **Rules:** a Commanded Address (65240) directed at the logger's NAME is ignored (NP-8).
 - **Config:** `address.*`. **Requirements:** NP-4 to NP-8, DET-4. **Test seam:** feed messages and a `FakeClock`; check the `TxRequest` sequence.
 
-### requests  (v1, layer 3)
+### requests  (v1, layer 3) — frozen for step 3
 - **Purpose:** the logger's scheduled and identity requests.
 - **Inputs:** session start; new connections from `detect`; replies and NACKs (`J1939Msg`); `FakeClock` time.
 - **Outputs:** `TxRequest`s (sweep, Time/Date, VIN to `requests.vin_sa`, Component, Software and ECU ID); `RequestOutcome(conn, pgn, outcome, value)` to `identify`; `sweep` `Record`s; "first sweep complete" signal to `detect`.
@@ -354,7 +354,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 | 1. Thin slice | `types`, `platform`, `capture`, `decode`, `eventlog` (append only), `clock` — **frozen 2026-11-13** |
 | 2. Sessions and chain | `session`, `eventlog`, `store`, `verify_chain`, `config` — **frozen 2026-11-13** |
 | 2a. Beacon go/no-go | none (no code) |
-| 3. Transmit | `transmit`, `address`, `requests` |
+| 3. Transmit | `transmit`, `address`, `requests` — **frozen 2026-11-13** |
 | 4. Detection | `detect`, `monitor` |
 | 5. Identification | `identify` |
 | 6. Training and inventory | `inventory`, `rawcap`, `retention` |
