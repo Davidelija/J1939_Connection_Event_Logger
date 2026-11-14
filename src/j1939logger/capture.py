@@ -1,4 +1,4 @@
-"""capture: frames in, timestamped records out (docs/modules.md section 4, contract v1).
+"""capture: frames in, timestamped records out (docs/modules.md section 4, contract v2).
 
 Layer 1; the only receiver on the CAN bus (CLAUDE.md rule 6). A thread reads
 the raw SocketCAN socket from ``platform.open_can()`` with ``recvmsg`` and
@@ -16,6 +16,9 @@ seconds that ``rawcap`` reads with ``window()``.
 * Own frames (sent by this logger, ``MSG_CONFIRM``) are marked ``Frame.own``.
 * Kernel drops: the ``SO_RXQ_OVFL`` count from the latest frame's ancillary data.
 * Mode change: ``set_mode()`` closes the socket and opens it again (DC-6).
+* Send handle (v2, DC-12): ``transmit_handle()`` gives ``transmit``, and only
+  ``transmit``, a way to send on this socket, so the logger's own frames come
+  back marked ``own`` (``MSG_CONFIRM``). Capture itself never sends.
 * Errors: a ``PlatformError`` (or an OS error, as ``can_down``) stops the
   thread; ``read_batch()`` raises it once the pending frames are drained.
   Capture never raises on frame content and never syncs files.
@@ -34,7 +37,7 @@ from typing import Any, Optional
 from j1939logger.platform.interface import Platform
 from j1939logger.types import Frame, PlatformError
 
-__all__ = ["Capture", "CaptureStats", "parse_frame"]
+__all__ = ["Capture", "CaptureStats", "parse_frame", "TransmitHandle"]
 
 CAN_EFF_FLAG = 0x80000000
 CAN_RTR_FLAG = 0x40000000
@@ -114,6 +117,24 @@ def _kind(f: Frame) -> str:
     if f.remote:
         return "remote"
     return "extended" if f.extended else "standard"
+
+
+class TransmitHandle:
+    """Sends one frame on capture's current socket; for ``transmit`` only (DC-12)."""
+
+    def __init__(self, capture: Capture) -> None:
+        self._capture = capture
+
+    def send(self, can_id: int, data: bytes) -> None:
+        sock = self._capture._sock
+        if sock is None:
+            raise PlatformError("can_down", "no open CAN socket")
+        if len(data) > 8:
+            raise ValueError("a CAN frame carries at most 8 bytes")
+        frame = _FRAME.pack(
+            (can_id & CAN_EFF_MASK) | CAN_EFF_FLAG, len(data), data.ljust(8, bytes(1))
+        )
+        sock.send(frame)
 
 
 class Capture:
@@ -213,6 +234,10 @@ class Capture:
             self._stats.frames[kind] = self._stats.frames.get(kind, 0) + 1
             if drops is not None:
                 self._stats.kernel_drops = drops
+
+    def transmit_handle(self) -> TransmitHandle:
+        """The send handle for ``transmit`` (DC-12); it follows the socket across mode changes."""
+        return TransmitHandle(self)
 
     # -- outputs --------------------------------------------------------------
 

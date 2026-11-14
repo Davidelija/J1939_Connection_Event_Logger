@@ -1,4 +1,4 @@
-"""decode: raw CAN frames to J1939 messages (docs/modules.md section 4, contract v1).
+"""decode: raw CAN frames to J1939 messages (docs/modules.md section 4, contract v2).
 
 Layer 2: pure. No I/O, no clock, no threads. Time comes only from each
 frame's ``ts_mono``.
@@ -12,9 +12,11 @@ frame's ``ts_mono``.
   up to 1785 bytes, with at most ``limits.tp_sessions`` open at once. A
   transfer closes with a reason counted in ``DecodeStats.tp_closed``:
   ``completed``, ``aborted``, ``replaced``, ``oversize``, ``too_many_sessions``,
-  ``duplicate``, ``bad_sequence``, ``timeout_t1`` to ``timeout_t4``. A
-  rejected transfer addressed to the logger produces a Connection Abort
-  ``TxRequest``. TP.CM and TP.DT frames themselves are not returned as
+  ``duplicate``, ``bad_sequence``, ``timeout_t1`` to ``timeout_t4``. For a
+  transfer addressed to the logger, decode asks ``transmit`` (through
+  ``TxRequest``s) for the replies J1939 requires (v2, DC-12): CTS when the RTS
+  is accepted and for each further window, EOMA when it completes, Connection
+  Abort when it is rejected. TP.CM and TP.DT frames themselves are not returned as
   messages; the reassembled message is, at the position of its last packet,
   with the time of its RTS or BAM.
 * Extended transport protocol (ETP, PGNs 51200 and 50944) is recognized, not
@@ -22,6 +24,8 @@ frame's ``ts_mono``.
   ETP.CM RTS counts in ``etp_seen``.
 * Malformed input is counted in ``DecodeStats.malformed`` by reason and never
   raises (SC-12a).
+* ``bus_state(frame)`` (v2, DC-12) reads bus-off and TX error-passive from an
+  error frame's controller state, for ``session`` to turn transmit off (NP-3).
 * Timeouts are checked against each frame's ``ts_mono``, so a transfer left
   open with no later traffic closes when the next frame arrives.
 
@@ -39,7 +43,15 @@ from typing import Optional
 
 from j1939logger.types import Frame, J1939Msg, Name, TxRequest
 
-__all__ = ["decode", "new_state", "decode_name", "split_id", "DecodeStats", "DecodeState"]
+__all__ = [
+    "decode",
+    "new_state",
+    "decode_name",
+    "split_id",
+    "bus_state",
+    "DecodeStats",
+    "DecodeState",
+]
 
 PGN_TP_CM = 60416
 PGN_TP_DT = 60160
@@ -60,6 +72,11 @@ ABORT_TIMEOUT = 3
 ABORT_BAD_SEQUENCE = 7
 ABORT_DUPLICATE = 8
 ABORT_OVERSIZE = 9
+
+# Error frame bits (linux/can/error.h)
+CAN_ERR_CRTL = 0x00000004
+CAN_ERR_BUSOFF = 0x00000040
+CAN_ERR_CRTL_TX_PASSIVE = 0x20
 
 # Timeouts in seconds (J1939-21; docs/errors.md tp_error row)
 T1, T2, T3, T4 = 0.75, 1.25, 1.25, 1.05
@@ -92,6 +109,7 @@ class _Transfer:
     timer: str  # which timeout applies next: "t1" to "t4"
     next_seq: int = 1
     window_end: int = 0  # last sequence number the current CTS allows (RTS/CTS only)
+    max_per_cts: int = 255  # from the RTS (0xFF: no limit)
     data: bytearray = field(default_factory=bytearray)
 
 
@@ -145,6 +163,38 @@ def _count(d: dict[str, int], key: str) -> None:
 
 def _pgn3(b: bytes) -> int:
     return b[0] | (b[1] << 8) | (b[2] << 16)
+
+
+def bus_state(frame: Frame) -> Optional[str]:
+    """``"bus_off"`` or ``"error_passive"`` (TX) from an error frame, else None (NP-3)."""
+    if not frame.error:
+        return None
+    if frame.can_id & CAN_ERR_BUSOFF:
+        return "bus_off"
+    if frame.can_id & CAN_ERR_CRTL and len(frame.data) > 1:
+        if frame.data[1] & CAN_ERR_CRTL_TX_PASSIVE:
+            return "error_passive"
+    return None
+
+
+def _cts(sa: int, pgn: int, count: int, next_seq: int) -> TxRequest:
+    # Clear To Send from the logger to the sender ``sa``.
+    return TxRequest(
+        pgn=PGN_TP_CM,
+        da=sa,
+        data=bytes([_CTS, count, next_seq, 0xFF, 0xFF]) + pgn.to_bytes(3, "little"),
+        kind="protocol",
+    )
+
+
+def _eoma(sa: int, pgn: int, size: int, packets: int) -> TxRequest:
+    # End of Message Acknowledgment from the logger to the sender ``sa``.
+    return TxRequest(
+        pgn=PGN_TP_CM,
+        da=sa,
+        data=bytes([_EOMA, size & 0xFF, size >> 8, packets, 0xFF]) + pgn.to_bytes(3, "little"),
+        kind="protocol",
+    )
 
 
 def _abort(sa: int, pgn: int, reason: int) -> TxRequest:
@@ -290,7 +340,17 @@ class _Run:
             deadline=f.ts_mono + (T1 if bam else T3),
             timer="t1" if bam else "t3",
             window_end=packets if bam else 0,
+            max_per_cts=d[4] if d[4] else 255,
         )
+        if not bam and self.logger_sa is not None and da == self.logger_sa:
+            self._clear_to_send(self.state.transfers[key], f.ts_mono)
+
+    def _clear_to_send(self, t: _Transfer, now: float) -> None:
+        # The logger is the receiver: ask for the next window (DC-12).
+        count = min(t.packets - t.next_seq + 1, t.max_per_cts, 255)
+        t.window_end = t.next_seq + count - 1
+        t.deadline, t.timer = now + T2, "t2"
+        self.tx.append(_cts(t.sa, t.pgn, count, t.next_seq))
 
     def tp_dt(self, f: Frame, sa: int, da: int) -> None:
         d = f.data
@@ -318,6 +378,8 @@ class _Run:
         if seq == t.packets:
             self.state.transfers.pop(key)
             _count(self.stats.tp_closed, "completed")
+            if t.da != GLOBAL and self.logger_sa is not None and t.da == self.logger_sa:
+                self.tx.append(_eoma(t.sa, t.pgn, t.size, t.packets))
             first = Frame(
                 ts_kernel=t.ts_kernel,
                 ts_mono=t.ts_mono,
@@ -331,6 +393,9 @@ class _Run:
             self.emit(first, t.priority, t.pgn, t.sa, t.da, bytes(t.data[: t.size]), via_tp=True)
             return
         if t.da != GLOBAL and seq >= t.window_end:
+            if self.logger_sa is not None and t.da == self.logger_sa:
+                self._clear_to_send(t, f.ts_mono)  # the logger asks for the next window
+                return
             t.deadline, t.timer = f.ts_mono + T3, "t3"  # waiting for the next CTS
         else:
             t.deadline, t.timer = f.ts_mono + T1, "t1"

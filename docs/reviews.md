@@ -15,6 +15,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 2. Sessions and chain |  |  |  |  |
 | 2a. Beacon go/no-go |  |  |  |  |
 | 3. Transmit, freeze |  |  | To check: the contracts marked "frozen for step 3" (safety-critical: `transmit`) and the gaps listed in the freeze pull request |  |
+| 3. Transmit, PR 1 |  |  | To check (safety-critical, CODEOWNERS): `transmit.py` guard and limits against NP-9, NP-16, NP-18 and DC-12; the release allow-lists moved into `transmit`; `capture` send handle; `decode` CTS/EOMA |  |
 | 3. Transmit |  |  |  |  |
 | 4. Detection |  |  |  |  |
 | 5. Identification |  |  |  |  |

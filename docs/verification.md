@@ -30,21 +30,21 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-12a | T | 1 | `test_SC_12a_*` (tests/malformed) | vcan | partial: decode under Hypothesis; monitor joins in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | NP-1 | T | 3 |  |  |  |  |  |
 | NP-2 | T | 3 |  |  |  |  |  |
-| NP-3 | T | 3 |  |  |  |  |  |
+| NP-3 | T | 3 | `test_NP_3_*` | vcan | partial: bus-off and TX error-passive read from error frames; disable drops the queue; session wiring in PR 3 | 2026-11-13 | CI, PR step-3-transmit |
 | NP-4 | T | 3 |  |  |  |  |  |
 | NP-5 | I, T | 3 |  |  |  |  |  |
-| NP-6 | T | 3 |  |  |  |  |  |
+| NP-6 | T | 3 | `test_NP_6_nothing_but_claims_for_250_ms_after_a_claim` | vcan | partial: transmit holds other traffic 250 ms after a claim; address module in PR 2 | 2026-11-13 | CI, PR step-3-transmit |
 | NP-7 | T | 3 |  |  |  |  |  |
 | NP-8 | T | 3 |  |  |  |  |  |
-| NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort` | vcan | partial: decode asks for Connection Abort; transmit in step 3 | 2026-11-13 | CI, PR step-1-logic |
+| NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort`, `test_NP_9_*` | vcan | partial: decode asks for Connection Abort; transmit in step 3; partial: transmit guard refuses and turns off on every breach type, sends only allow-listed frames, CTS/EOMA for transfers to the logger; witness on vcan0 in step 3 PR 3 | 2026-11-13 | CI, PR step-3-transmit |
 | NP-11 | T | 3 |  |  |  |  |  |
 | NP-12 | T | 3 |  |  |  |  |  |
 | NP-13 | T | 3 |  |  |  |  |  |
 | NP-14 | T | 3 |  |  |  |  |  |
-| NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked` | vcan | partial: decode marks own frames and replies; exclusion from detection in step 4 | 2026-11-13 | CI, PR step-1-logic |
-| NP-16 | T | 3 |  |  |  |  |  |
-| NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing`, `test_NP_17_interface_down_raises_can_down_from_read_batch`, `test_NP_17_can_down_fault_plan_reaches_read_batch`, `test_NP_17_missing_interface_raises_can_missing_on_start` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3; capture raises can_missing and can_down | 2026-11-13 | CI, PR step-1-logic |
-| NP-18 | T | 3 |  |  |  |  |  |
+| NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked`, `test_NP_15_frames_sent_through_the_handle_come_back_marked_own` | vcan | partial: decode marks own frames and replies; exclusion from detection in step 4; frames sent through capture's handle come back marked own (vcan0) | 2026-11-13 | CI, PR step-3-transmit |
+| NP-16 | T | 3 | `test_NP_16_*` | vcan | partial: no more than 10 frames in any 1 s, one outstanding request per destination, protocol first; witness in PR 3 | 2026-11-13 | CI, PR step-3-transmit |
+| NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing`, `test_NP_17_interface_down_raises_can_down_from_read_batch`, `test_NP_17_can_down_fault_plan_reaches_read_batch`, `test_NP_17_missing_interface_raises_can_missing_on_start`, `test_NP_17_nothing_is_sent_before_transmit_is_enabled`, `test_NP_17_send_handle_without_a_socket_raises_can_down` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3; capture raises can_missing and can_down; nothing sent before transmit is enabled | 2026-11-13 | CI, PR step-3-transmit |
+| NP-18 | T | 3 | `test_NP_18_*` | vcan | partial: ENOBUFS and breaches turn transmit off for the session, never back on; session wiring in PR 3 | 2026-11-13 | CI, PR step-3-transmit |
 | NP-19 | T | 3 |  |  |  |  |  |
 | TRN-2 | D | 6 / 8 |  |  |  |  |  |
 | TRN-3 | T | 6 |  |  |  |  |  |

@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-13, after build step 2 (PRs #5 to #8).
+Last updated: 2026-11-13, step 3 PR 1 (`transmit`, `capture` and `decode` v2).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -26,7 +26,7 @@ flowchart TB
     decode["decode ✅"]; config["config ✅"]
   end
   subgraph L1["1 · Services"]
-    capture["capture ✅"]; clock["clock ✅"]; eventlog["eventlog ✅"]; transmit["transmit ⬜"]; store["store ✅"]; rawcap["rawcap ⬜"]
+    capture["capture ✅"]; clock["clock ✅"]; eventlog["eventlog ✅"]; transmit["transmit ✅"]; store["store ✅"]; rawcap["rawcap ⬜"]
   end
   subgraph L0["0 · Hardware"]
     interface["platform/interface ✅"]; desktop["platform/desktop ✅"]; beacon["platform/beacon ⬜"]
@@ -43,13 +43,13 @@ flowchart TB
 | `platform/interface.py` | 0 | The hardware boundary: the nine functions any hardware must provide (open the CAN socket, check the bit rate, set the light, read the time, RTC state, wake times, watchdog kick, storage paths, fault hook). | 1 | ✅ |
 | `platform/desktop.py` | 0 | The `vcan0` implementation used by every test, with `FakeClock` (tests move time) and a fault plan that injects 12 kinds of error at set times. | 1 | ✅ |
 | `platform/beacon.py` | 0 | The DG Beacon implementation of the same interface. | 8 | ⬜ |
-| `capture.py` | 1 | The only CAN receiver: a thread that reads frames with kernel timestamps into a queue and a 12 s ring, and counts frames and kernel drops. | 1 | ✅ |
+| `capture.py` | 1 | The only CAN receiver: a thread that reads frames with kernel timestamps into a queue and a 12 s ring, and counts frames and kernel drops. Gives `transmit` alone a send handle on its socket, so the logger's own frames come back marked (v2). | 1, 3 | ✅ |
 | `clock.py` | 1 | The only source of time: real-time clock, else vehicle time as an offset, else time since wake; turns frame times into record times, vehicle times and seconds since wake (v2); logs the first vehicle time and clock skew. | 1–2 | ✅ |
 | `eventlog.py` | 1 | The only writer of session files: appends records with the SHA-256 hash chain, one write per record; syncs every 2 s on its own thread and at once after a new device; continues the chain into new parts; writes seconds since wake when there is no valid time; reads the last complete record after a crash. | 1–2 | ✅ |
-| `transmit.py` | 1 | The only path to the bus: allow-list, 10 frames/s cap, one request per destination; turns transmit off on any breach. | 3 | ⬜ |
+| `transmit.py` | 1 | The only path to the bus. Refuses and turns transmit off for the session on any breach (PGN outside the allow-list, a request for a PGN not allowed, a claim with another NAME, anything but NACK, CTS, EOMA or Abort); at most 10 frames in any 1 s; one outstanding request per destination; protocol frames first; nothing but claims for 250 ms after a claim; off on bus-off, error-passive or a send error. | 3 | ✅ |
 | `store.py` | 1 | The only writer of supporting files (status, inventory, config, library, `state.json` on internal flash): loading the newest or a given version, atomic writes, card space, freeing raw captures only. | 2 | ✅ |
 | `rawcap.py` | 1 | Saves raw candump files from 10 s before to 60 s after each new connection or control flag, from capture's ring. | 6 | ⬜ |
-| `decode.py` | 2 | Raw frames to J1939 messages: ID split, NAME decode, multi-frame reassembly up to 1785 bytes with timeouts and limits; counts bad input and never crashes on it. | 1 | ✅ |
+| `decode.py` | 2 | Raw frames to J1939 messages: ID split, NAME decode, multi-frame reassembly up to 1785 bytes with timeouts and limits; counts bad input and never crashes on it. Asks for CTS and EOMA for transfers to the logger, and reads bus-off and error-passive from error frames (v2). | 1, 3 | ✅ |
 | `config.py` | 2 | Validates the config (every key, type, allow-lists never widened, move grace at most 5 s, detection-weakening changes flagged) and the inventory and library files; refuses unknown formats. | 2 | ✅ |
 | `detect.py` | 3 | Decides when a device connects, moves or ends. Now: a new NAME opens a connection with a wake-timing category. Full rules come in step 4. | 1, 4 | 🟡 |
 | `monitor.py` | 3 | What each connected device sends and requests: PGN tables, requests kept, DM activity, control-PGN flags. | 4 | ⬜ |

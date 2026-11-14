@@ -62,3 +62,20 @@ def test_SC_6_every_module_sits_in_a_layer() -> None:
     top = {p.stem if p.is_file() else p.name for p in PKG.iterdir()}
     top -= {"__init__", "__pycache__", "data"}
     assert top <= LAYERED, f"modules with no layer in docs/modules.md section 2: {top - LAYERED}"
+
+
+def _text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_NP_9_only_transmit_sends_and_only_session_hands_it_the_send_handle() -> None:
+    # Rule 4 and DC-12: the send handle lives in capture, is fetched by session
+    # and given to transmit; no other module touches it or sends on a socket.
+    allowed_handle = {"capture.py", "session.py", "transmit.py"}
+    for path in _modules():
+        rel = path.relative_to(PKG)
+        text = _text(path)
+        if "transmit_handle" in text or "TransmitHandle" in text:
+            assert rel.name in allowed_handle and rel.parts[0] != "platform", rel
+        if rel.name not in ("capture.py",) and rel.parts[0] != "platform":
+            assert ".send(" not in text.replace("self._handle.send(", ""), f"{rel} sends on the bus"

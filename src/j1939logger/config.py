@@ -29,6 +29,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Callable, Optional, Union
 
+from j1939logger.transmit import RELEASE_REQUEST_ALLOW, RELEASE_TRANSMIT_ALLOW
 from j1939logger.types import CATEGORIES, Record
 
 __all__ = [
@@ -49,10 +50,7 @@ __all__ = [
     "RELEASE_REQUEST_ALLOW",
 ]
 
-# The allow-lists this release may use (NP-9). Configuration can narrow them,
-# never widen them; widening needs a software release (CLAUDE.md rule 4).
-RELEASE_TRANSMIT_ALLOW = frozenset({59904, 60928, 59392, 60416})
-RELEASE_REQUEST_ALLOW = frozenset({60928, 65254, 65260, 65259, 65242, 64965})
+# The allow-lists this release may use are defined once, in transmit (NP-9).
 MAX_MOVE_GRACE_S = 5.0
 
 _HEX_NAME = re.compile(r"^0x[0-9A-Fa-f]{16}$")
