@@ -235,3 +235,28 @@ def test_LOG_15_capture_on_vcan0_timestamps_frames_and_reads_buffer_back(tmp_pat
     finally:
         tx.close()
         cap.stop()
+
+
+@needs_vcan
+def test_NP_15_frames_sent_through_the_handle_come_back_marked_own(tmp_path: Path) -> None:
+    p = DesktopPlatform(root=tmp_path)
+    cap = Capture(p, rx_buffer_bytes=1 << 20, raw_before_s=10.0)
+    cap.start(listen_only=False)
+    try:
+        cap.transmit_handle().send(0x18EAFFF7, (60928).to_bytes(3, "little"))
+        got: list[Frame] = []
+        for _ in range(100):
+            got += cap.read_batch(10)
+            if got:
+                break
+            time.sleep(0.01)
+        assert got and got[0].own and got[0].can_id == 0x18EAFFF7
+    finally:
+        cap.stop()
+
+
+def test_NP_17_send_handle_without_a_socket_raises_can_down(tmp_path: Path) -> None:
+    cap = make(tmp_path)
+    with pytest.raises(PlatformError) as exc:
+        cap.transmit_handle().send(0x18EAFFF7, (60928).to_bytes(3, "little"))
+    assert exc.value.kind == "can_down"

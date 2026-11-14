@@ -20,7 +20,7 @@ def _public(cls: type) -> set[str]:
 
 
 def test_SC_6_capture_public_names() -> None:
-    assert set(capture.__all__) == {"Capture", "CaptureStats", "parse_frame"}
+    assert set(capture.__all__) == {"Capture", "CaptureStats", "parse_frame", "TransmitHandle"}
     assert {"read_batch", "window", "stats", "start", "stop", "set_mode"} <= _public(Capture)
     assert [f.name for f in dataclasses.fields(CaptureStats)] == [
         "kernel_drops",
