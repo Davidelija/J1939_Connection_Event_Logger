@@ -45,7 +45,7 @@ import json
 import re
 import threading
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -54,16 +54,24 @@ from j1939logger.address import Address
 from j1939logger.admin import DiagLog
 from j1939logger.capture import Capture
 from j1939logger.clock import Clock
-from j1939logger.config import Inventory
+from j1939logger.config import Inventory, Library, LibraryError, validate_library
 from j1939logger.decode import bus_state, decode, new_state
 from j1939logger.detect import Detect
 from j1939logger.eventlog import ZERO_HASH, EventLog, format_utc, scan_tail
+from j1939logger.identify import (
+    Identification,
+    classify,
+    identification_fields,
+    identification_record,
+    identify,
+    reclassify,
+)
 from j1939logger.monitor import Monitor
 from j1939logger.platform.interface import Platform
 from j1939logger.requests import PGN_VIN, RequestOutcome, Requests
 from j1939logger.store import Store
 from j1939logger.transmit import Transmit
-from j1939logger.types import Frame, J1939Msg, PlatformError, Record, TxRequest
+from j1939logger.types import Connection, Frame, J1939Msg, Name, PlatformError, Record, TxRequest
 
 __all__ = ["Session", "settings_from_config", "SessionFile", "session_files", "SW_VERSION"]
 
@@ -131,6 +139,20 @@ CONNECTION_END_REASON = {
 }
 
 
+@dataclass
+class _Ident:
+    """What session keeps per connection for identify (step 5, DC-17)."""
+
+    conn: Connection
+    rule: str  # classification_rule at connection start
+    outcomes: list[RequestOutcome] = field(default_factory=list)
+    ident: Optional[Identification] = None
+
+
+APPROVED = "external device (approved)"
+IDENTITY_REQUESTS = 3  # Component ID, Software ID, ECU ID (NP-13)
+
+
 class Session:
     def __init__(
         self,
@@ -174,6 +196,17 @@ class Session:
         self.address: Optional[Address] = None
         self.requests: Optional[Requests] = None
         self.outcomes: list[RequestOutcome] = []  # identity outcomes, for identify (step 5)
+        self.library: Optional[Library] = None
+        self._library_fault: Optional[str] = None
+        self._idents: dict[int, _Ident] = {}
+        self._end_sets: dict[int, frozenset[int]] = {}
+        baseline = inventory.entries if inventory is not None else ()
+        self._known_addresses = {
+            a
+            for e in baseline
+            if e.name is not None and e.category != APPROVED
+            for a in e.addresses
+        }
         self._first_open = True
         self._prev_hash = ZERO_HASH
         self._next_session = 1
@@ -209,9 +242,25 @@ class Session:
     # -- lifecycle --------------------------------------------------------------
 
     def start(self) -> None:
-        """Power-on: open capture listen-only and open the first session."""
+        """Power-on: load the device library, open capture listen-only and the first session."""
+        self._load_library()
         self.capture.start(listen_only=True)
         self._open_session(wake="power-on")
+
+    def _load_library(self) -> None:
+        """The newest device library on the card (IDN-5); a corrupt one is a high fault (DC-19)."""
+        data = self.store.load("library")
+        if data is None:
+            return  # no library: identification without library matches
+        try:
+            checked = validate_library(json.loads(data.decode("utf-8")))
+        except (ValueError, UnicodeDecodeError) as exc:
+            checked = LibraryError([f"not JSON: {exc}"])
+        if isinstance(checked, LibraryError):
+            self._library_fault = f"device library corrupt ({checked})"
+            return
+        self.library = checked
+        self._versions["library"] = checked.version
 
     def stop(self) -> None:
         self._stop.set()
@@ -323,6 +372,7 @@ class Session:
                     self._log(self._vin_check(outcome))
                 else:
                     self.outcomes.append(outcome)
+                    self._identity_outcome(outcome)
         if self.transmit is not None:
             for fault in self.transmit.take_faults():
                 self.diag.log("error", "transmit", str(fault.fields.get("cause")))
@@ -389,9 +439,16 @@ class Session:
                 self._log(record, msg.ts_mono)
 
     def _log_detection(self, record: Record, ts_mono: Optional[float] = None) -> None:
+        if record.type == "connection_end":
+            self._final_identification(record)
         self._log(record, ts_mono)
         if record.type != "connection_start":
             return
+        if record.conn is not None and self.detect is not None:
+            conn = next((c for c in self.detect.connections if c.conn == record.conn), None)
+            if conn is not None and record.fields.get("category") != APPROVED:
+                rule = str(record.fields.get("classification_rule", "wake timing"))
+                self._idents[record.conn] = _Ident(conn, rule)
         self._connections_started += 1
         if self.eventlog is not None and not self._header_pending:
             self.eventlog.sync_now()  # DET-16
@@ -399,6 +456,87 @@ class Session:
             name = record.fields.get("name")
             value = int(name, 16) if isinstance(name, str) else None
             self.requests.identify(record.conn, int(record.fields["sa"]), value)
+
+    # -- identification (step 5, DC-17) -------------------------------------------
+
+    def _classify(
+        self, name: Optional[Name], since_s: float, what: str
+    ) -> tuple[str, str, str, str]:
+        return classify(
+            name,
+            since_s,
+            wake_window_s=float(self._settings["classify.wake_window_s"]),
+            trailer_vehicle_system=int(self._settings["classify.trailer_vehicle_system"]),
+            untrained=self._inventory is None,
+            what=what,
+        )
+
+    def _end_summary(self, conn: int) -> Mapping[str, Any]:
+        """monitor.end, keeping the requested PGNs for the final identification."""
+        assert self.monitor is not None
+        self._end_sets[conn] = self.monitor.requested_pgns(conn)
+        return self.monitor.end(conn)
+
+    def _identity_outcome(self, outcome: RequestOutcome) -> None:
+        state = self._idents.get(outcome.conn) if outcome.conn is not None else None
+        if state is None or state.ident is not None:
+            return
+        state.outcomes.append(outcome)
+        if len(state.outcomes) >= IDENTITY_REQUESTS:  # all identity requests answered
+            self._identify(state)
+
+    def _run_identify(
+        self,
+        state: _Ident,
+        requested: frozenset[int],
+        sent: set[int],
+        ended_before_session: bool = False,
+    ) -> Identification:
+        reason = reclassify(
+            state.conn.category,
+            requested=requested,
+            sent=sent,
+            control_pgns=self._settings["detection.control_pgns"],
+            claimed_known_address=state.conn.sa in self._known_addresses,
+            ended_before_session=ended_before_session,
+        )
+        return identify(
+            state.conn,
+            state.outcomes,
+            requested,
+            self.library,
+            tie_margin=float(self._settings["identify.tie_margin"]),
+            sent=sent,
+            classification_rule=state.rule,
+            reclassified=reason,
+            untrained=self._inventory is None,
+        )
+
+    def _identify(self, state: _Ident) -> None:
+        """The identification record once the identity requests are answered (IDN-3, IDN-4)."""
+        assert self.monitor is not None
+        conn = state.conn.conn
+        sent = {int(p["pgn"]) for p in self.monitor.summary(conn).get("pgns_sent", [])}
+        state.ident = self._run_identify(state, self.monitor.requested_pgns(conn), sent)
+        self._log(identification_record(state.conn, state.ident, state.outcomes, self.clock.to_utc))
+
+    def _final_identification(self, record: Record) -> None:
+        """Recalculate at connection end; final_identification if it changed (IDN-4, DC-17)."""
+        state = self._idents.pop(record.conn, None) if record.conn is not None else None
+        requested = self._end_sets.pop(record.conn, frozenset()) if record.conn else frozenset()
+        if state is None:
+            return
+        sent = {int(p["pgn"]) for p in record.fields.get("pgns_sent", [])}
+        early = record.fields.get("end_reason") == "silence"
+        final = self._run_identify(state, requested, sent, ended_before_session=early)
+        if state.ident is None:  # ended before its identity requests were answered
+            state.ident = final
+            self._log(identification_record(state.conn, final, state.outcomes, self.clock.to_utc))
+        elif final.changed_from(state.ident) or final.category != state.ident.category:
+            record.fields["final_identification"] = identification_fields(
+                final, state.outcomes, self.clock.to_utc
+            )
+        record.sev = final.sev  # connection_end takes the final severity (DC-17)
 
     def _detection(self) -> None:
         """The first-sweep signals and detect's timed checks (DET-2, DET-4, DET-6)."""
@@ -429,7 +567,7 @@ class Session:
         if self.detect is None:
             return
         for record in self.detect.end_all(reason, self.clock.mono()):
-            self._log(record)
+            self._log_detection(record)
 
     def _timers(self) -> None:
         if self.eventlog is None:
@@ -582,8 +720,15 @@ class Session:
         )
         self.monitor = Monitor(self.clock, self._settings, self._inventory)
         self.detect = Detect(
-            self.clock, self._settings, self._inventory, self.monitor.end, self.clock.mono()
+            self.clock,
+            self._settings,
+            self._inventory,
+            self._end_summary,
+            self.clock.mono(),
+            classify=self._classify,
         )
+        self._idents = {}
+        self._end_sets = {}
         self._no_sweep_sent = False
         self._connections_started = 0
         self.transmit = Transmit(self._platform, self.clock, self._settings, self._logger_name)
@@ -621,6 +766,17 @@ class Session:
                 )
             )
         self._startup_faults = []
+        if self._library_fault is not None:
+            self._log(
+                Record(
+                    "fault",
+                    "high",
+                    None,
+                    None,
+                    {"cause": self._library_fault, "logger_action": "identifying without it"},
+                )
+            )
+            self._library_fault = None  # once, in the first session (DC-19)
         if self._guard_holds:
             self._log(
                 Record(

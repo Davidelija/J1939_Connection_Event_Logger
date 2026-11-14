@@ -58,7 +58,7 @@ from j1939logger.clock import Clock
 from j1939logger.config import Inventory, InventoryEntry
 from j1939logger.decode import PGN_ADDRESS_CLAIM, decode_name
 from j1939logger.eventlog import format_utc
-from j1939logger.types import Connection, J1939Msg, Record
+from j1939logger.types import Connection, J1939Msg, Name, Record
 
 __all__ = ["Detect"]
 
@@ -69,6 +69,10 @@ UNRECOGNIZED = "external device (unrecognized)"
 NULL_SA, GLOBAL_SA = 254, 255
 
 Summary = Callable[[int], Mapping[str, Any]]
+# identify.classify bound to the session's settings (v1.2, DC-17):
+# (NAME or None, seconds since the session's first frame, "first claim" | "first frame")
+# -> (category, severity, classification_rule, classification_detail)
+Classify = Callable[[Optional[Name], float, str], tuple[str, str, str, str]]
 
 
 def _minutes_or_seconds(s: float) -> str:
@@ -98,6 +102,7 @@ class Detect:
         inventory: Optional[Inventory],
         summary: Optional[Summary] = None,
         ready_mono: Optional[float] = None,
+        classify: Optional[Classify] = None,
     ) -> None:
         self._clock = clock
         self._silence_s = float(settings["detection.silence_end_s"])
@@ -105,6 +110,7 @@ class Detect:
         self._wait_s = float(settings["detection.first_sweep_wait_s"])
         self._wake_window_s = float(settings["classify.wake_window_s"])
         self._summary = summary
+        self._classify_fn = classify
         self._untrained = inventory is None
         entries = inventory.entries if inventory is not None else ()
         self._by_name: dict[int, InventoryEntry] = {
@@ -411,7 +417,7 @@ class Detect:
                 "classification_rule": "in inventory",
             }
         else:
-            category, sev, rule, detail = self._classify(msg.ts_mono, "first claim")
+            category, sev, rule, detail = self._classify(msg.ts_mono, "first claim", decoded)
             fields = {
                 "sa": msg.sa,
                 "name": _hex(name),
@@ -469,9 +475,13 @@ class Detect:
             conn.last_mono = max(conn.last_mono, self._last_from.get(sa, first))
         return [self._record("connection_start", sev, msg, fields, conn)]
 
-    def _classify(self, t: float, what: str) -> tuple[str, str, str, str]:
-        """Wake timing (DET-13) until identify (step 5); notice when untrained (TRN-9)."""
+    def _classify(
+        self, t: float, what: str, name: Optional[Name] = None
+    ) -> tuple[str, str, str, str]:
+        """identify.classify when injected (DC-17); else wake timing (DET-13, TRN-9)."""
         since = t - (self._first_mono if self._first_mono is not None else t)
+        if self._classify_fn is not None:
+            return self._classify_fn(name, since, what)
         category = NOT_IN_BASELINE if since <= self._wake_window_s else UNRECOGNIZED
         sev = "notice" if self._untrained else "high"
         detail = f"{what} {_minutes_or_seconds(since)} after the session's first frame"

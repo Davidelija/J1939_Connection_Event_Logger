@@ -18,6 +18,8 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 
 **How it decides a device is new.** Each device that claims an address is known by its 64-bit NAME, so a known ECU that moves to another address is still recognized; a device that never claims is known by its address. At the start of a session the logger waits for its first address-claim sweep before deciding about addresses that send without claiming. A connection ends after 60 s of silence from the device while the rest of the bus keeps talking, or at key-off. The connection's end record lists every PGN the device sent, its first 100 requests, the ECUs it addressed, diagnostic activity, extended transfers, control PGNs and proprietary PGNs.
 
+**How it identifies a device.** For each new device the logger asks for its Component ID, Software ID and ECU ID, then combines the answers with the NAME and the PGNs the device requested. It compares the requests against the device library (`library/lib-vN.json` on the card) and records a type guess, a make and model when one is known, and a confidence (high, medium or low). A make or model that comes only from the library is reported as a profile match. A device whose NAME says it is a trailer is logged at notice; if it then sends requests, control PGNs or memory access, it is reclassified as an unrecognized external device and the reason is recorded. If the library file is corrupt, the logger records a high fault and keeps identifying without it.
+
 *(The rest of this chapter is written as each build step lands.)*
 
 - What you need *(step 7)*
