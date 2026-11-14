@@ -110,6 +110,8 @@
   },
   "training": {
     "timeout_min": 120,
+    "engine_running_rpm": 400,
+    "driving_kmh": 5,
     "states": [
       "key-on engine off",
       "idle",

@@ -131,6 +131,8 @@ SCHEMA: dict[str, Callable[[Any], bool]] = {
     "clock.max_skew_min": _is_num,
     "training.timeout_min": _is_num,
     "training.states": _str_list,
+    "training.engine_running_rpm": _is_num,  # DC-20
+    "training.driving_kmh": _is_num,  # DC-20
     "install.connector": _str,
     "install.network": _str,
 }

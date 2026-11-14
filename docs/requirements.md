@@ -311,6 +311,8 @@ Defaults are those in `cfg-v3`. Each parameter lives in the versioned config fil
 | `clock.max_skew_min` | 5 min | LOG-16 |
 | `training.timeout_min` | 120 min | TRN-3 |
 | `training.states` | key-on engine off, idle, driving, PTO | TRN-2, TRN-12 |
+| `training.engine_running_rpm` | 400 rpm (DC-20) | TRN-12 |
+| `training.driving_kmh` | 5 km/h (DC-20) | TRN-12 |
 | `install.connector`, `install.network` | set at installation | LOG-6 |
 
 ## Enumerated values
