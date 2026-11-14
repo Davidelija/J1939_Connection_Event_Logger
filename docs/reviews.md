@@ -20,6 +20,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 3. Transmit, PR 3 | 2026-11-14 | Vaughan Lynn | Reviewed before merge (reported in the Claude Code session): `session` bit-rate gate, restart guard, bus-state disable, claim and request wiring; the witness tests; step 3 marked merged |  |
 | 3. Transmit |  |  |  |  |
 | 4. Detection, freeze |  |  | To check: the contracts marked "frozen for step 4" and the gaps listed in the freeze pull request |  |
+| 4. Detection, PR 1 |  |  | To check: `monitor` against DET-7 to DET-12, DC-13 and DC-14 (control-flag `via`, known-device new PGNs, ETP tracking, bounds); the session 142 example chain recomputed for rec 8 |  |
 | 4. Detection |  |  |  |  |
 | 5. Identification |  |  |  |  |
 | 6. Training and inventory |  |  |  |  |
