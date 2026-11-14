@@ -261,10 +261,11 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Step 6 rules (DC-20):** runs at session start and after each raw capture; frees while free space is below `storage.event_reserve_mb` plus `limits.raw_mb_per_session`; a notice fault at `storage.warn_pct` once per session; a high fault "card full; raw captures stopped" when only the reserve is left. The retrieved list is empty until step 7.
 - **Requirements:** LOG-11, LOG-22. **Test seam:** a temporary directory with a fake size limit.
 
-### status  (v1, layer 3)
+### status  (v1, layer 3) — frozen for step 7
 - **Purpose:** the status file and the light.
 - **Inputs:** state from `session` (unreviewed events, training needed or running, faults, card nearly full, transmit off, restart loop, VIN mismatch).
 - **Outputs:** the status file contents (`status-1`), written by `store`; `platform.set_light()` with the priority fast > slow > steady (the layer 3 exception in section 2).
+- **Step 7 rules (DC-21):** the `status-1` fields of `docs/examples/status.json` plus `training_coverage` while training, `transmit` and `vin_status`; written through `store` at each state change and at most every `logging.sync_interval_s`. Light: off while starting and detecting the bit rate; fast blink for a high fault, a VIN mismatch, transmit off or a restart loop; slow blink for unreviewed high events, needs training, training running or card nearly full; otherwise steady. Each light change is a diagnostic-log line.
 - **Requirements:** STS-1 to STS-3. **Test seam:** state in, file contents and light pattern out (table-driven).
 
 ### session  (v1, layer 4) — frozen for step 2
@@ -279,30 +280,34 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Frames that aren't J1939 (DC-10):** `session_end.frames_not_j1939` uses the log-format keys; `session` maps `DecodeStats.non_j1939["standard"]` to `std_11bit`.
 - **Requirements:** LOG-1, LOG-2, LOG-6, LOG-12, LOG-17, LOG-18, TRN-9, NP-19, STS-18, STS-19. **Test seam:** run in-process with `DesktopPlatform` and `FakeClock`; this is the component-test entry point.
 
-### admin  (v1, layer 4)
+### admin  (v1, layer 4) — frozen for step 7
 - **Purpose:** restart, retrain and the diagnostic log. The diagnostic-log writer is built in step 2 in minimal form (`diag/logger.log`, rotated by `diag.max_bytes` and `diag.files`, the conventions in §1), before `admin` freezes in step 7 (DC-10).
 - **Inputs:** commands from `session`.
 - **Outputs:** `reset` `Record`s; the diagnostic log (separate from evidence, `diag.*`).
+- **Step 7 rules (DC-21):** `restart` writes `reset` (mode "restart", reason), the diagnostic restart cause "software restart", clears the restart guard and ends the process with exit code 75 for systemd to restart it. `retrain` writes `reset` (mode "retrain", the archived inventory version) and sets `inventory_active: false` in `state.json`; the next session runs untrained until a training is confirmed; nothing is deleted.
 - **Requirements:** STS-11, STS-12, LOG-20. **Not built:** move, wipe, library push, update, rollback, roles (Deferred).
 
-### cmdserver  (v1, layer 5, inside `main`)
+### cmdserver  (v1, layer 5, inside `main`) — frozen for step 7
 - **Purpose:** the command socket (STS-23).
 - **Inputs:** JSON lines on `/run/j1939-logger/cmd.sock`: `{"proto":1,"cmd":...,"args":{...},"operator":...,"reason":...}`.
 - **Outputs:** `{"proto":1,"ok":true,"result":{...}}` or `{"proto":1,"ok":false,"error":"...","next":"..."}`; requests queued for the main loop, one at a time.
 - **Errors:** an unknown protocol version, unknown command or bad arguments is refused with a reason; never changes state itself.
+- **Commands (DC-21):** `status`, `login`, `logout`, `train_start`, `train_status`, `train_finish`, `train_confirm` (`apply`), `events` (`all`), `approve` (`event`, `warning_shown`), `remove` (`entry`, `pgn`, `direction`, `warning_shown`), `clear` (`events`, `disposition`), `config_show`, `config_push` (`config`, `confirm`), `inventory_show`, `retrieve_list`, `retrieved` (`files`, `chain`, `last_hash`), `restart`, `retrain`. A refusal carries `error` and `next` (LAP-15). The socket is `/run/j1939-logger/cmd.sock` on the Beacon and `main --socket PATH` elsewhere. Unreviewed high events are kept in `state.json` across sessions; `clear` accepts only those, and `approve` clears its source event in the same step.
 - **Test seam:** a socket client in tests; the protocol is the contract.
 
-### j1939cmd  (v1, layer 5, logger side)
+### j1939cmd  (v1, layer 5, logger side) — frozen for step 7
 - **Purpose:** the program SSH runs for each laptop command.
 - **Inputs:** command line from `j1939ctl`; the SSH key fingerprint (`ExposeAuthInfo`); the fingerprint-to-name file.
 - **Outputs:** the `cmdserver` reply on standard output (JSON) with an exit code; when the service is down, `status` from the status file and `retrieve` file lists, and "logger not running" for anything that changes state.
+- **Step 7 rules (DC-21):** the fingerprint comes from the file named by `SSH_USER_AUTH` and maps to a name through `/etc/j1939-logger/operators` (`--operators PATH` in tests); an unknown or missing fingerprint is refused for every changing command. `retrieve_list` is answered from the card, with each session file, raw capture and diagnostic file's size and SHA-256, even when the service is down.
 - **Requirements:** STS-5, STS-23, LAP-15.
 
-### j1939ctl  (v1, laptop)
+### j1939ctl  (v1, laptop) — frozen for step 7
 - **Purpose:** the operator tool on Windows.
 - **Inputs:** the 16 commands in the hand-off command table.
 - **Outputs:** plain-word screens, the one prompt pattern (what will change, reason, y/N), exit codes (LAP-15); retrieved folders made read-only; the last hash per logger; the summary report.
-- **Requirements:** LAP-1 to LAP-15, LAP-17, STS-7, STS-9. **Test seam:** against a local logger on `vcan0` through `j1939cmd`, as in `demo/run_demo.sh`.
+- **Step 7 rules (DC-21):** its own package `src/j1939ctl/`, standard library only, `subprocess` for `ssh` and `scp`; it may import only `j1939logger.config` and the chain checker. Each run sends `login` first and `logout` last. `retrieve` copies new or changed files into `<folder>/<VIN>/`, skips files already held with the same hash, re-copies partial ones, keeps a same-name file with different content under a `.N` suffix, cuts the open session at its last complete line, runs the chain check against the last hash it keeps per logger, makes the folder read-only and sends `retrieved`. `config push` validates with `config.validate(new, old)` first. `report` writes the five sections to the screen and to `report-<UTC>.txt`, plus `events.csv`, grouping events by NAME (or SA) across sessions.
+- **Requirements:** LAP-1 to LAP-15, LAP-17, STS-7, STS-9. **Test seam:** against a local logger on `vcan0` through `j1939cmd`, as in `demo/run_demo.sh`; in unit tests `ssh` is replaced by a runner that calls `j1939cmd` directly.
 
 ### verify_chain  (v1, tool) — frozen for step 2
 - **Purpose:** check a set of session files.
@@ -372,7 +377,7 @@ Test scripts plug in at four levels. Each level uses only what is listed here, s
 | 4. Detection | `detect`, `monitor` — **frozen 2026-11-14** |
 | 5. Identification | `identify` — **frozen 2026-11-14** |
 | 6. Training and inventory | `inventory`, `rawcap`, `retention` — **frozen 2026-11-14** |
-| 7. Laptop tool | `cmdserver`, `j1939cmd`, `j1939ctl`, `admin`, `status` |
+| 7. Laptop tool | `cmdserver`, `j1939cmd`, `j1939ctl`, `admin`, `status` — **frozen 2026-11-14** |
 | 8. Beacon | `platform` (Beacon implementation) |
 | 9. Documentation | none |
 
