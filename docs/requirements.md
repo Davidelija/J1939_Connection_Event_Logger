@@ -327,7 +327,7 @@ Defaults are those in `cfg-v3`. Each parameter lives in the versioned config fil
 | Clock source | rtc, vehicle, elapsed |
 | Make source | self-reported, manufacturer code, library, none |
 | Classification rule | in inventory, wake timing, request activity, NAME. NAME is used in analysis only |
-| VIN status | match, mismatch, unavailable |
+| VIN status | match, mismatch, unavailable; pending in `session_start` until the `vin_check` record (DC-12) |
 | Previous session end | clean, power loss, software restart, watchdog restart, software update |
 | Reset mode | restart, retrain, move, wipe |
 | Approval kind | inventory, device, PGN sent, PGN requested, address; removals use remove device, remove PGN sent, remove PGN requested |

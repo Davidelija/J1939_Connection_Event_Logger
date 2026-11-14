@@ -31,6 +31,25 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-12 — Step 3 freeze: transfer replies, send handle, bit rate, rate cap, outstanding requests, breach rules, bus state, restart guard, VIN check, address choice  (accepted, 2026-11-13)
+- **Raised by:** Claude Code, step 3 freeze pull request #9 (gaps 1 to 10)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session, option B for the VIN; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:**
+  1. `decode` v2 produces CTS and EOMA (as well as Connection Abort) `TxRequest`s for transfers addressed to the logger.
+  2. `capture` v2 gives `transmit`, and only `transmit`, a send handle on its own socket (`transmit_handle()`), so the logger's frames keep `MSG_CONFIRM` and `Frame.own` stays exact; capture never sends.
+  3. `session` stays listen-only until `platform.bitrate_check()` confirms 250000 or 500000, retrying, with a fault after `can.bitrate_fault_s`; then `capture.set_mode(listen_only=False)`.
+  4. Rate cap: at most `transmit.max_frames_per_s` frames in any sliding 1 s window, all frames counted; protocol frames go first; a frame over the cap waits.
+  5. Outstanding requests: `transmit` holds a second request to a destination until `requests` calls `release(da)`; global requests count as destination 255.
+  6. Breach: a PGN outside `transmit.allow_list`; a Request for a PGN outside `requests.allow_list`; an Address Claim with another NAME; an Acknowledgment that is not a NACK; a TP.CM that is not CTS, EOMA or Abort; a kind that does not match its PGN. Refused, never sent; transmit off for the session with a high `tx_breach` fault.
+  7. `decode.bus_state(frame)` reads bus-off and TX error-passive from error frames; `session` calls `transmit.disable(reason)` on either, and `transmit` disables itself on `ENOBUFS`.
+  8. Restart guard: `state.json` gains `unclean_starts` (UTC times, or null); the guard holds when `restart_guard.count` fall within `restart_guard.window_min`; it clears after a clean end or an operator `restart`.
+  9. VIN, option B: `session_start` at ready has `vin` null and `vin_status` "pending"; a new `vin_check` record (info) follows with the VIN, its status, the inventory VIN and the request outcome. `vin_mismatch` stays the high record for a mismatch (step 6).
+  10. Address choice from `address.claim_from` down, skipping inventory, claimed and reserved addresses; lower NAME wins; wait `address.claim_wait_ms`; Cannot Claim from 254 after the last loss; answer Request for Address Claim, NACK other requests to the logger, ignore Commanded Address.
+- **Why:** gaps found while freezing the step 3 contracts (pull request #9).
+- **Affects:** `decode` v1 to v2, `capture` v1 to v2 (`docs/modules.md`); `transmit`, `address`, `session` wording; `docs/log-format.md` (`vin_check` record; `unclean_starts` in `state.json`); `docs/requirements.md` (VIN status "pending"). Formats stay `log-1` and `state-1` (no release has shipped).
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** written with the step 3 code (`test_NP_*`), including the witness checks on `vcan0`.
+
 ## DC-11 — Record numbers continue across parts; session_start keeps every field from step 2  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 2 PR 2 (branch `step-2-session`)
 - **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
