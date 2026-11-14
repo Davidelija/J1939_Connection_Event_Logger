@@ -31,6 +31,15 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-18 — Trailer devices are classified by the rule "NAME"  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 5 PR 1 (`identify`), branch `step-5-identify`
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("NAME", amend the note, chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** the requirements' Classification rule enumeration said "NAME is used in analysis only", but DET-18 classifies a trailer device from its NAME and DC-17 records that as rule "NAME". The note now reads: the logger writes NAME only for the trailer rule (DET-18); otherwise NAME is used in analysis only. `identify.classify` and `identify.reclassify` (a trailer claiming a known ECU's address) write "NAME".
+- **Why:** the requirement and the enumeration note disagreed; the requirements win, and DET-18 is the requirement that needs the value.
+- **Affects:** DET-18; `docs/requirements.md` (Enumerated values: Classification rule). `types.CLASSIFICATION_RULES` already holds "NAME". Format stays `log-1`.
+- **Docs updated in the same change:** `docs/requirements.md`, `CHANGELOG.md`.
+- **Tests:** `test_DET_18_trailer_name_is_a_trailer_device_at_notice`.
+
 ## DC-17 — Step 5 freeze: confidence, self-reported identity, make and profile fields, ties, classification rules, inputs  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 5 freeze, branch `step-5-freeze`
 - **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

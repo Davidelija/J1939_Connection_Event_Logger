@@ -19,6 +19,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 3. Transmit, PR 2 |  |  | To check: `address` (address choice, concede, Cannot Claim, answers and NACKs) and `requests` (sweep, Time/Date, VIN, identity, timeouts, no repeats) against NP-4 to NP-14 and LOG-9 |  |
 | 3. Transmit, PR 3 | 2026-11-14 | Vaughan Lynn | Reviewed before merge (reported in the Claude Code session): `session` bit-rate gate, restart guard, bus-state disable, claim and request wiring; the witness tests; step 3 marked merged |  |
 | 3. Transmit |  |  |  |  |
+| 5. Identification, PR 1 |  |  | To check: `identify` against DET-13, DET-18, IDN-3, IDN-4, IDN-6, DC-17 and DC-18 (confidence, make precedence, ties, reclassification); the Classification rule note in `docs/requirements.md` |  |
 | 5. Identification, freeze |  |  | To check: `identify` marked "frozen for step 5"; DC-17 items 1 to 10; the new `identification` fields in `docs/log-format.md` |  |
 | 4. Detection, freeze |  |  | To check: the contracts marked "frozen for step 4" and the gaps listed in the freeze pull request |  |
 | 4. Detection, PR 1 |  |  | To check: `monitor` against DET-7 to DET-12, DC-13 and DC-14 (control-flag `via`, known-device new PGNs, ETP tracking, bounds); the session 142 example chain recomputed for rec 8 |  |
