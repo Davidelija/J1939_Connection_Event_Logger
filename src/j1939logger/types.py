@@ -199,7 +199,7 @@ MAKE_SOURCES = ("self-reported", "manufacturer code", "library", "none")
 
 CLASSIFICATION_RULES = ("in inventory", "wake timing", "request activity", "NAME")
 
-VIN_STATUSES = ("match", "mismatch", "unavailable")
+VIN_STATUSES = ("match", "mismatch", "unavailable", "pending")  # pending: DC-12
 
 PREV_SESSION_ENDS = (
     "clean",

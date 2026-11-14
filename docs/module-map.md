@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, step 3 PR 2 (`address`, `requests`).
+Last updated: 2026-11-14, after build step 3 (PRs #9 to #12).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -59,7 +59,7 @@ flowchart TB
 | `inventory.py` | 3 | The known-good devices: training, approvals, removals, versions. | 6 | ⬜ |
 | `retention.py` | 3 | Keeps the card from filling: decides which raw captures may be freed; never session files. | 6 | ⬜ |
 | `status.py` | 3 | The status file and the one status light (fast blink beats slow blink beats steady). | 7 | ⬜ |
-| `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks. Restart guard and transmit come in step 3. | 1–3 | 🟡 |
+| `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks; listen-only until the bit rate is confirmed, then normal mode, the address claim and the request schedule; transmit off on bus-off or error-passive; the restart guard; the VIN check. Status file and commands come in step 7. | 1–3, 7 | 🟡 |
 | `admin.py` | 4 | The diagnostic log (built: one line per event, repeats counted, rotated, restart causes for the next session) and, in step 7, restart and retrain. | 2, 7 | 🟡 |
 | `main.py` | 5 | Service entry point. Now: reads and validates the config and inventory files and runs a session on the desktop platform. Later: the command socket (`cmdserver`). | 1, 7 | 🟡 |
 | `j1939cmd.py` | 5 | The logger-side program each laptop command runs over SSH; passes the request to the service over a Unix socket. | 7 | ⬜ |
