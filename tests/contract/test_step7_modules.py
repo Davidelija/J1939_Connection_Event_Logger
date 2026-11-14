@@ -20,3 +20,21 @@ def test_SC_6_session_answers_every_protocol_command() -> None:
         "inventory_show", "retrieve_list", "retrieved", "restart", "retrain",
     }  # fmt: skip
     assert all(hasattr(Session, f"_cmd_{c}") for c in commands)  # DC-21 item 1
+
+
+def test_DC_21_j1939ctl_imports_only_config_from_the_logger() -> None:
+    import ast
+    from pathlib import Path
+
+    pkg = Path(__file__).resolve().parents[2] / "src" / "j1939ctl"
+    for path in pkg.glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            for name in names:
+                if name.startswith("j1939logger"):
+                    assert name == "j1939logger.config", f"{path.name} imports {name}"
