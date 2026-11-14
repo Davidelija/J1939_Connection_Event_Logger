@@ -23,6 +23,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 4. Detection, PR 1 |  |  | To check: `monitor` against DET-7 to DET-12, DC-13 and DC-14 (control-flag `via`, known-device new PGNs, ETP tracking, bounds); the session 142 example chain recomputed for rec 8 |  |
 | 4. Detection, PR 2 |  |  | To check: `detect` against DET-1 to DET-6, DET-15 to DET-17 and DC-13 (first-sweep wait, DET-3 replies, moves and same-NAME conflicts, silence versus key-off); `session` and `main` now pass `config.Inventory` |  |
 | 4. Detection, PR 3 |  |  | To check: `session` drives `detect` and `monitor` (sweep signals, no-sweep conditions, `connection_end` before `session_end`, end reasons at stop and roll-over); DC-15 example fix; address claims excluded from DET-12; step 4 marked merged |  |
+| 4. Detection, gaps |  |  | To check: DC-16, `decode` v3 marks Acknowledgments naming the logger as replies to it; `monitor` v1.1 and `detect` v1.1 interfaces named in `docs/modules.md` |  |
 | 4. Detection |  |  |  |  |
 | 5. Identification |  |  |  |  |
 | 6. Training and inventory |  |  |  |  |
