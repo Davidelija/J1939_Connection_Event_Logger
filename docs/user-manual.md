@@ -127,9 +127,41 @@ The last line says `chain verifies` (exit code 0) or `chain BROKEN` (exit code 1
 - Deleting data by hand *(step 8)*
 
 ## 6. Reference
-- Troubleshooting table, generated from `docs/errors.md` *(each step adds its rows)*
+- Troubleshooting table: below
 - Command reference: below
 - Glossary, FAQ, escalation contact *(step 9)*
+
+### Troubleshooting
+
+<!-- troubleshooting:start -->
+*Generated from `docs/errors.md` by `tools/troubleshooting.py`; edit that table, not this one.*
+
+| Light | What happened | What the logger does | What to do |
+| --- | --- | --- | --- |
+| Fast blink | CAN interface: Missing at start, or `ENODEV`/`ENETDOWN` while running | Retry with backoff; fault after `can.bitrate_fault_s`; log once with a count, not per retry. Transmit: never. | Check the 9-pin cable and the tap, then run `status`; if the light stays fast, power-cycle the logger. |
+| Off, then fast blink | CAN interface: No bit rate confirmed | Stay listen-only and keep trying; fault after 60 s. Transmit: never. | Check that the key is on and the 9-pin cable is seated, then run `status` again after a minute. |
+| Fast blink | CAN interface: Bus-off; error-passive from its own transmit errors | Stop transmitting for the session; listen-only; keep detecting. Transmit: off for the session. | Check the tap wiring and termination; transmit stays off until the next session. Report the session number. |
+| Fast blink | CAN transmit: `ENOBUFS` (transmit queue full, for example no other node to acknowledge) | Treat as a transmit error; no retry loop. Transmit: off for the session. | Check that the 9-pin cable is seated (no other node acknowledged); transmit stays off until the next session. |
+| Fast blink | CAN transmit: A frame would break the allow-list or rate cap | Drop the frame; turn transmit off. Transmit: off for the session. | Report it with the session number: the logger stopped transmitting to protect the truck. |
+| Unchanged | CAN receive: Kernel drops (`SO_RXQ_OVFL` count rises) | Count; notice fault if above zero during a session | Nothing to do now; if it repeats, report the session number (the bus may be too busy). |
+| Unchanged | Frames: 11-bit IDs, remote frames, error frames, wrong data length for a known PGN | Count by type; never raise; error frames feed bus-error counts and bit-rate detection | Nothing to do; these frames are counted in the session end record. |
+| Unchanged | Transport: Out-of-order or duplicate sequence numbers, missing packets, T1 to T4 timeouts (750, 1250, 1250, 1050 ms), aborts, too many open sessions, oversize transfers | Close the session and count the reason; for a transfer addressed to the logger, send Connection Abort; never raise. Transmit: abort only. | Nothing to do; transfer problems are counted. Report them if a device's records look incomplete. |
+| Unchanged | Transport: ETP transfer (51200, 50944) | Log without reassembling; flag a memory transfer with DM14 to DM16 activity | Review the device's connection records; a memory transfer is flagged there. |
+| Per severity | Address claim: Known NAME at a new address; Cannot Claim from another node; request for claim to a specific address | Confirm a move when the old address is silent within `detection.move_grace_s`; defined outcomes per DET-4 and DET-15; log, never raise. Transmit: continues (the logger concedes). | Review the event; if the move is expected, run `approve <event-id>` so it stops recurring. |
+| Slow blink | Address claim: Same NAME at two addresses (old address still sending after the grace, or both answer a sweep) | Treat as a possible copied NAME; keep both addresses tracked | Run `events` and report the event ID: two devices may be using one ECU's identity. |
+| Fast blink | Storage: `ENOSPC`, `EROFS`, `EIO`, card removed (`ENODEV`), slow sync | LOG-22 path: high fault; reopen after reinsertion; sync on its own thread; never block capture | Reseat or replace the card, then run `status`; run `retrieve` as soon as the card works. |
+| Slow blink | Storage: Card nearly full | Free space in the agreed order: retrieved raw captures, then unretrieved, oldest first (DC-20); with only the reserve left, raw captures stop (high fault) | Run `retrieve` so the logger can free retrieved raw captures; replace the card if it stays nearly full. |
+| Fast blink (fault) or slow blink (untrained) | Storage: Truncated last line; leftover temporary files; corrupt inventory, config or device library | Report truncated; ignore temporary files; corrupt inventory runs untrained; corrupt config stops with a fault; corrupt device library: high fault, identification continues without it (DC-19). Transmit: per state. | Corrupt config: `config push` a good one. Corrupt inventory: `train start`. Corrupt library: reinstall the release. |
+| n/a | Storage: Card not ext4 | Refuse to install | Format the card as ext4 and run `install.sh` again (see the porting guide). |
+| Unchanged | Storage: `state.json` missing, corrupt or not writable on internal flash | Missing, with a blank card: a new logger. Missing or corrupt, with sessions on the card: continue numbering and the chain from the newest session file (LOG-5). Corrupt, with a blank card: notice fault; start as a new logger (`retrieve` keeps any same-named files, LAP-5). Not writable: notice fault; `install.sh` asks for the next session number when a new card is fitted | Run `status`; if the session number looks wrong, report it (`install.sh` asks for it when needed). |
+| Unchanged | Clock: RTC invalid; vehicle time arrives mid-session; vehicle time far off; clock jump | Keep a vehicle-time offset; never set the system clock while running; skew fault above `clock.max_skew_min` | Nothing to do unless the clock stays invalid; `status` shows its source and its difference from the laptop. |
+| Off while restarting | Service: Unhandled exception; hang | Write a stack trace to the diagnostic log; exit non-zero so systemd restarts it. Transmit: per next session. | Wait for the logger to restart; if it keeps restarting, run `retrieve` and report the diagnostic log. |
+| Fast blink | Service: Restart loop | Start listen-only with no claim, sweep or requests until an operator runs `restart`. Transmit: off until `restart`. | Run `retrieve`, then `restart --reason ...` once the cause is fixed; transmit stays off until then. |
+| Unchanged | Commands: Service not running; a second operator at the same time; invalid ID; wrong state (for example `train finish` when not training); unknown protocol version | Refuse with the reason and the next step; non-zero exit code; commands handled one at a time | Follow the Next step line in the message; for "logger not running", power-cycle the logger. |
+| n/a | Laptop: SSH host-key change, wrong passphrase, timeout, dropped link, Windows long paths, read-only folder | Clear message and next step for each; resume retrieval; never mark a half-copied file complete | Check the cable and the laptop's address; accept a new host key only if the logger was replaced; use a shorter folder for long paths. |
+| n/a | Laptop: Retrieved file has the same name as one already retrieved, with different content | Keep both: rename the new file with a suffix, never skip it; report it | Nothing to do; both copies are kept and the report names the renamed file. |
+| n/a | Laptop: Cannot connect | Message names the fixed address (`network.address`) and the cable check | Check the Ethernet cable and that the laptop got a 192.168.250.x address, then run `status`. |
+<!-- troubleshooting:end -->
 
 ### Command reference
 

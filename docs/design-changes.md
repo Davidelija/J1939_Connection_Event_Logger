@@ -31,6 +31,15 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-22 — The troubleshooting table is generated from docs/errors.md, with an Operator column  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, branch `docs-troubleshooting` (CLAUDE.md rule 11)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (generator, markers and CI check accepted, and the Operator column chosen, in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** `docs/errors.md` gains a last column, **Operator**: what the operator should do, in plain words, one line per row. `tools/troubleshooting.py` reads the table and writes the user manual's troubleshooting table (light, what happened, what the logger does, what to do) between `<!-- troubleshooting:start -->` and `<!-- troubleshooting:end -->`; `--check` fails when the manual is out of date, and CI runs it. Parsers of `docs/errors.md` accept the extra column (`tools/check_verification.py`, the Kind contract test).
+- **Why:** CLAUDE.md rule 11 says the troubleshooting table is generated from `docs/errors.md`; the table had no column for the operator's next step.
+- **Affects:** `docs/errors.md` (Operator column), `docs/user-manual.md` (section 6), `tools/troubleshooting.py`, `tools/check_verification.py`, CI. No record or format change.
+- **Docs updated in the same change:** the files above, `docs/module-map.md`, `CHANGELOG.md`.
+- **Tests:** `test_DC_22_*` in `tests/unit/test_troubleshooting.py`.
+
 ## DC-21 — Step 7 freeze: protocol commands, operator identity, login records, retrieval, status file and light, unreviewed events, config push, restart and retrain, the laptop package, the report  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 7 freeze, branch `step-7-freeze`
 - **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

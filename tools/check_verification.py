@@ -170,7 +170,7 @@ def check_release(rows: Sequence[Row], tests: set[str], errors_md: Optional[str]
     if errors_md is not None:
         for n, line in enumerate(errors_md.splitlines(), 1):
             cells = _cells(line) if line.startswith("|") else []
-            if len(cells) == 10 and cells[2].startswith("`"):
+            if len(cells) >= 10 and cells[2].startswith("`"):  # DC-22 adds Operator
                 test = cells[9]
                 if not test or re.fullmatch(r"\*?\(step [0-9a-z]+\)\*?", test):
                     errors.append(f"docs/errors.md line {n} ({cells[2]}): Test column placeholder")

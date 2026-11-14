@@ -22,7 +22,7 @@ def test_SC_6_fault_kinds_match_errors_md_kind_column() -> None:
     kinds: list[str] = []
     for line in (ROOT / "docs" / "errors.md").read_text(encoding="utf-8").splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) == 10 and cells[2].startswith("`"):
+        if len(cells) >= 10 and cells[2].startswith("`"):
             kinds += re.findall(r"`([a-z0-9_]+)`", cells[2])
     assert kinds, "no Kind column found in docs/errors.md"
     assert tuple(kinds) == FAULT_KINDS
