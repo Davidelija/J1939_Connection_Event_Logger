@@ -64,14 +64,14 @@ demo passed: the scan tool's claim gave a chained connection_start
 ## 2. Everyday use
 - The status light and the `status` screen *(steps 7, 8)*
 - Training a truck; PTO is detected from Power Takeoff Information 1 (PGN 65264, engaged when Power Takeoff Speed is above zero) or declared by the operator *(step 6)*
-- Reviewing new events *(step 7)*
+- Reviewing new events: run `events`, then `approve` a device you know or `clear` it with the repair-order number; the slow blink stops when every high event is cleared.
 - Changing the inventory *(step 6)*
-- Retrieving logs and running the report *(step 7)*
+- Retrieving logs and running the report: `retrieve`, then `report logs/<VIN>`; the chain check result and the latest chain hash are in section 5.
 - Reading the report *(step 7)*
-- Changing a setting *(step 7)*
+- Changing a setting: edit a copy of the config with a new version number, then `config push <file>`; it applies from the next session.
 
 ## 3. Less common tasks
-- Restart or retrain *(step 7)*
+- Restart or retrain: `restart --reason ...` restarts the software; `retrain --reason ...` archives the inventory so the truck can be trained again.
 - Moving the logger to another truck by hand *(step 8)*
 - Replacing the card or removing the logger; the card is ext4, so card-swap retrieval needs a Linux machine or VM; the new card starts a new chain, which the chain check reports as a declared break; session numbers carry on from the logger's internal flash (if that isn't writable, `install.sh` asks for the next session number) *(step 8)*
 
@@ -128,7 +128,26 @@ The last line says `chain verifies` (exit code 0) or `chain BROKEN` (exit code 1
 
 ## 6. Reference
 - Troubleshooting table, generated from `docs/errors.md` *(each step adds its rows)*
-- Command reference *(step 7)*
+- Command reference: below
 - Glossary, FAQ, escalation contact *(step 9)*
+
+### Command reference
+
+Run `j1939ctl <command> --help` for every option. Commands that change the logger show what will change, ask for a reason (or take `--reason`) and ask y/N (or take `--yes`). Exit codes: 0 done, 1 refused or declined, 2 usage, 3 logger not reachable or not running.
+
+| Command | What it does |
+| --- | --- |
+| `status` | Home screen: state and light, VIN, session, events to review, whether training is needed, card use, clock and its difference from the laptop, versions, and a Next step line. Works when the logger service is down (last saved status). |
+| `train start` / `train status` / `train finish [--pto]` | Start training; show the time used and left, the conditions covered and the devices found; finish, show the proposed inventory by entry ID and ask whether to apply it. |
+| `events [--all]` | List the events to review by event ID (for example 142-37), in plain words. |
+| `approve <event-id>` | Approve a logged device, a new PGN (with a warning line for a control PGN) or a moved address; clears the event; saves a new inventory version for the next session. |
+| `remove <entry-id> [--pgn N --direction sent\|requested]` | Remove a device, or one PGN, from the inventory from the next session (a warning line for an ECU found in training). |
+| `clear <event-id>... [--disposition TEXT]` | Mark high events as reviewed with one reason. |
+| `config show` / `config push <file> [--confirm]` | Show the active config, or check a new one on the laptop and send it; a change that weakens detection needs `--confirm`. |
+| `inventory show` / `inventory export [--out FILE]` | Show the inventory, or write it as CSV; `--from-folder DIR` works on a retrieved folder without the logger. |
+| `retrieve` | Copy new files into `logs/<VIN>/`, check the chain, make the folder read-only and record the retrieval on the logger. |
+| `report <folder>` | Write the five-section report and `events.csv` from a retrieved folder; works offline. |
+| `restart` | Restart the logger software (the next session records it). |
+| `retrain` | Archive the inventory and run untrained from the next session until a training is applied. |
 
 ## Appendix: quick card *(step 9)*

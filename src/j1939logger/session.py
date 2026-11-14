@@ -41,6 +41,8 @@ cause, or power loss with ``bytes_cut_off``.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import queue
@@ -166,6 +168,20 @@ CONNECTION_END_REASON = {
 
 def _refused(error: str, next_step: str) -> dict[str, Any]:
     return {"proto": 1, "ok": False, "error": error, "next": next_step}
+
+
+def operator_key_fingerprints(keys_dir: Path) -> list[str]:
+    """``SHA256:...`` of each installed operator public key (``*.pub``), as ``ssh-keygen -l``."""
+    out = []
+    for p in sorted(keys_dir.glob("*.pub")) if keys_dir.is_dir() else []:
+        try:
+            parts = p.read_text(encoding="ascii").split()
+            blob = base64.b64decode(parts[1], validate=True)
+        except (OSError, ValueError, IndexError, binascii.Error):
+            continue  # not a public key file
+        digest = base64.b64encode(hashlib.sha256(blob).digest()).decode("ascii")
+        out.append("SHA256:" + digest.rstrip("="))
+    return sorted(out)
 
 
 def card_files(card: Path) -> list[dict[str, Any]]:
@@ -827,7 +843,8 @@ class Session:
                 if include_all or eid in wanted:
                     rows.append({"event": eid, "type": r.get("type"), "sev": r.get("sev"),
                                  "utc": r.get("utc"), "sa": r.get("sa"), "name": r.get("name"),
-                                 "category": r.get("category"),
+                                 "category": r.get("category"), "pgn": r.get("pgn"),
+                                 "entry": r.get("entry"), "direction": r.get("direction"),
                                  "reviewed": eid not in wanted})  # fmt: skip
         return rows
 
@@ -1652,7 +1669,7 @@ class Session:
     def _session_start(self) -> Record:
         wake_mono, ready_mono = self._platform.on_wake()
         keys_dir = self._platform.paths().keys
-        keys = sorted(p.stem for p in keys_dir.glob("*.pub")) if keys_dir.is_dir() else []
+        keys = operator_key_fingerprints(keys_dir)  # LAP-8
         asking = self.transmit is not None and self.transmit.enabled and self.logger_sa is not None
         fields: dict[str, Any] = {
             "format": LOG_FORMAT,

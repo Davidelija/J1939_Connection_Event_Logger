@@ -12,7 +12,7 @@ The goal is a Beacon result for every hardware-relevant T requirement. If a Beac
 
 A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requirement marked T has no test once its Step has merged, skipping Deferred rows. For step 8 requirements, a `bench/` procedure ID in the Test-or-procedure column satisfies the check. Before a release tag the check requires every T row to have a passing test, a procedure with a result, or a recorded gap.
 
-**Merged build steps:** 1, 2, 3, 4, 5, 6. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
+**Merged build steps:** 1, 2, 3, 4, 5, 6, 7. *(The pull request that completes a build step adds it here; `tools/check_verification.py` reads this line.)*
 
 | ID | Method | Step | Test or procedure | Where | Result | Date | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-19 | T | 3 | `test_NP_19_restart_loop_starts_listen_only_with_a_high_fault` | vcan | pass on vcan: three unclean starts in 10 minutes start listen-only with a high fault; cleared by a clean end; systemd limits in step 8 | 2026-11-14 | CI, PR step-3-session |
 | TRN-2 | D | 6 / 8 |  |  |  |  |  |
 | TRN-3 | T | 6 | `test_TRN_3_training_stops_observing_at_the_timeout` | vcan | pass on vcan: observation stops at training.timeout_min; the proposal waits for train finish | 2026-11-14 | CI, PR step-6-session |
-| TRN-4 | D | 7 | `test_TRN_4_trained_inventory_is_saved_only_when_confirmed`, `test_TRN_4_rejected_inventory_is_not_applied` | vcan | partial: a proposal is saved only when confirmed, a rejection applies nothing (in-process calls); the laptop review and prompt in step 7 (D) | 2026-11-14 | CI, PR step-6-session |
+| TRN-4 | D | 7 | `test_TRN_4_trained_inventory_is_saved_only_when_confirmed`, `test_TRN_4_rejected_inventory_is_not_applied` | vcan | partial: proposal shown by entry ID and applied only on y; rejection logged; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
 | TRN-5 | D | 7 |  |  |  |  |  |
 | TRN-6 | I | 6 | `test_TRN_6_a_saved_inventory_applies_from_the_next_session` | vcan | partial: each confirmed training, approval or removal is the next version tied to the VIN (inspection in step 8) | 2026-11-14 | CI, PR step-7-status |
 | TRN-7 | I | 6 |  |  |  |  |  |
@@ -114,39 +114,39 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-3 | I | 7 | `test_STS_3_status_file_has_the_example_fields`, `test_STS_3_the_status_file_is_kept_on_the_card` | vcan | partial: status-1 file on the card with the example fields plus transmit and vin_status; inspection in step 9 | 2026-11-14 | CI, PR step-7-status |
 | STS-4 | I, D | 8 |  |  |  |  |  |
 | STS-5 | D | 7 / 8 | `test_STS_5_fingerprint_matches_ssh_keygen`, `test_STS_5_operator_names_come_from_the_fingerprint_file`, `test_STS_5_an_unknown_key_cannot_change_the_logger`, `test_STS_5_j1939cmd_reads_the_key_from_ssh_user_auth` | vcan | partial: operator from the SSH key fingerprint (matches ssh-keygen); unknown keys cannot change the logger; sshd, keys.sh and the wired port in step 8 (D) | 2026-11-14 | CI, PR step-7-cmdserver |
-| STS-7 | D | 7 |  |  |  |  |  |
+| STS-7 | D | 7 | `test_STS_7_report_has_five_sections_in_order_and_events_csv` | vcan | partial: five sections in order, events grouped by device, events.csv; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
 | STS-8 | I | 9 |  |  |  |  |  |
-| STS-9 | T | 7 | `test_STS_9_*`, `test_STS_9_config_push_saves_a_new_version_and_logs_the_change`, `test_STS_9_weakening_needs_confirm_and_is_high`, `test_STS_9_a_bad_config_is_rejected_and_logged` | vcan | partial: validation and records; config_push saves the next version, weakening needs confirm, rejections logged; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| STS-9 | T | 7 | `test_STS_9_*`, `test_STS_9_config_push_saves_a_new_version_and_logs_the_change`, `test_STS_9_weakening_needs_confirm_and_is_high`, `test_STS_9_a_bad_config_is_rejected_and_logged` | vcan | pass on vcan: config push validated, saved as the next version, weakening needs --confirm and is high, rejections logged; applies from the next session | 2026-11-14 | CI, PR step-7-j1939ctl |
 | STS-10 | T | — | Deferred, not built |  |  |  |  |
-| STS-11 | T | 7 | `test_STS_11_restart_logs_reset_and_ends_with_exit_code_75` | vcan | partial: reset record, exit code 75, the next session records a software restart; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
-| STS-12 | T | 7 | `test_STS_12_retrain_runs_the_next_session_untrained` | vcan | partial: reset record, inventory archived, next session untrained; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| STS-11 | T | 7 | `test_STS_11_restart_logs_reset_and_ends_with_exit_code_75` | vcan | pass on vcan: reset record, exit code 75, the next session records a software restart; systemd restart in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| STS-12 | T | 7 | `test_STS_12_retrain_runs_the_next_session_untrained` | vcan | pass on vcan: inventory archived, untrained from the next session until a training is applied | 2026-11-14 | CI, PR step-7-j1939ctl |
 | STS-13 | T | — | Deferred, not built |  |  |  |  |
 | STS-14 | T | — | Deferred, not built |  |  |  |  |
 | STS-15 | T | — | Deferred, not built |  |  |  |  |
 | STS-16 | T | — | Deferred, not built |  |  |  |  |
-| STS-17 | T | 7 |  |  |  |  |  |
+| STS-17 | T | 7 | `test_STS_17_config_push_is_validated_on_the_laptop_first` | vcan | pass on vcan: the laptop validates before sending; weakening needs --confirm (migration deferred) | 2026-11-14 | CI, PR step-7-j1939ctl |
 | STS-18 | T | 2 | `test_STS_18_watchdog_kicks_are_counted`, `test_STS_18_watchdog_is_kicked_on_every_loop` | vcan | partial: desktop `watchdog_kick()` only; hang detection in step 2; main loop kicks the watchdog | 2026-11-13 | CI, PR step-2-session |
 | STS-19 | T | 2 | `test_STS_19_*`, `test_STS_19_corrupt_inventory_runs_untrained_with_high_fault` | vcan | partial: corrupt config and inventory detected; start-up self-check in PR 2; corrupt inventory runs untrained with a high fault | 2026-11-13 | CI, PR step-2-session |
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
 | STS-22 | T | — | Deferred, not built |  |  |  |  |
-| STS-23 | T | 7 | `test_STS_23_replies_follow_the_protocol_and_refuse_with_a_next_step`, `test_STS_23_*` | vcan | partial: protocol checks, one command at a time through the main loop, busy refusal, the Unix socket (CI), service-down answers for status and retrieve; the laptop in step 7 PR 3 | 2026-11-14 | CI, PR step-7-cmdserver |
+| STS-23 | T | 7 | `test_STS_23_replies_follow_the_protocol_and_refuse_with_a_next_step`, `test_STS_23_*` | vcan | pass on vcan: one command at a time through the socket and main loop; service-down status and retrieve; refusals with the next step | 2026-11-14 | CI, PR step-7-j1939ctl |
 | LAP-1 | D | 8 |  |  |  |  |  |
-| LAP-2 | D | 7 |  |  |  |  |  |
-| LAP-3 | D | 7 |  |  |  |  |  |
-| LAP-4 | T | 7 | `test_LAP_4_clear_needs_unreviewed_ids_and_a_reason` | vcan | partial: clear on unreviewed IDs with a reason, review_clear logged; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
-| LAP-5 | T | 7 | `test_LAP_5_retrieved_files_are_logged_and_listed` | vcan | partial: file list with sizes and hashes, retrieval record, retrieved files in state.json and status; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
-| LAP-6 | T | 7 |  |  |  |  |  |
-| LAP-8 | T | 7 |  |  |  |  |  |
-| LAP-9 | T | 7 |  |  |  |  |  |
-| LAP-10 | D | 7 |  |  |  |  |  |
-| LAP-11 | T | 7 | `test_LAP_11_approve_clears_its_event_in_the_same_step` | vcan | partial: approval clears its source event; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
-| LAP-12 | D | 7 |  |  |  |  |  |
-| LAP-13 | D | 7 |  |  |  |  |  |
+| LAP-2 | D | 7 | `test_LAP_15_refusals_say_why_and_what_to_do_with_a_nonzero_exit` | vcan | partial: the 16 commands with --help; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-3 | D | 7 | `test_LAP_3_changing_commands_show_the_change_ask_a_reason_then_y_n`, `test_LAP_3_removing_a_training_ecu_shows_a_warning_line` | vcan | partial: one prompt pattern, reason, y/N, warning lines, IDs never list positions; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-4 | T | 7 | `test_LAP_4_clear_needs_unreviewed_ids_and_a_reason` | vcan | pass on vcan: clear on unreviewed IDs with one reason, review_clear logged | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-5 | T | 7 | `test_LAP_5_retrieved_files_are_logged_and_listed`, `test_LAP_5_retrieve_copies_new_files_checks_the_chain_and_tells_the_logger`, `test_LAP_5_a_same_name_file_with_other_content_is_kept_with_a_suffix` | vcan | pass on vcan: VIN folder, new files only, chain checked against the kept last hash, read-only, suffix for changed content, diagnostic log copied, retrieval logged | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-6 | T | 7 | `test_LAP_6_a_partial_copy_is_copied_again` | vcan | pass on vcan: files already held are skipped, partial copies copied again | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-8 | T | 7 | `test_LAP_8_each_header_lists_the_installed_operator_key_fingerprints` | vcan | partial: session_start lists the installed key fingerprints; release/keys.sh in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-9 | T | 7 | `test_LAP_9_the_open_session_is_copied_as_complete_records` | vcan | pass on vcan: the open session copied as complete records and reported as in progress | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-10 | D | 7 | `test_LAP_10_status_is_the_home_screen_with_a_next_step` | vcan | partial: one block with a Next step line, clock difference shown, never set; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-11 | T | 7 | `test_LAP_11_approve_clears_its_event_in_the_same_step` | vcan | pass on vcan: approve needs a reason and clears its event in the same step | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-12 | D | 7 | `test_STS_7_report_has_five_sections_in_order_and_events_csv`, `test_LAP_13_inventory_export_writes_csv_offline` | vcan | partial: report and inventory show and export on a retrieved folder; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
+| LAP-13 | D | 7 | `test_LAP_13_inventory_export_writes_csv_offline` | vcan | partial: inventory export writes CSV; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
 | LAP-14 | D | 6 / 7 |  |  |  |  |  |
-| LAP-15 | D | 7 | `test_STS_23_bad_requests_are_refused_with_the_next_step` | vcan | partial: every refusal has a reason and a next step and a non-zero exit code from j1939cmd; --help in j1939ctl (PR 3) | 2026-11-14 | CI, PR step-7-cmdserver |
+| LAP-15 | D | 7 | `test_STS_23_bad_requests_are_refused_with_the_next_step` | vcan | partial: every refusal says why and what to do, non-zero exit codes, --help; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
 | LAP-16 | T | — | Deferred, not built |  |  |  |  |
-| LAP-17 | D | 7 |  |  |  |  |  |
+| LAP-17 | D | 7 | `test_LAP_17_events_use_plain_words` | vcan | partial: plain words for categories in events, train finish, inventory and report; demonstrated in tests against an in-process logger; the Windows laptop procedure (LAP-1) in step 8 | 2026-11-14 | CI, PR step-7-j1939ctl |
 | HW-1 | I, T | 8 |  |  |  |  |  |
 | HW-2 | I | 2a / 8 |  |  |  |  |  |
 | HW-3 | T | 8 |  |  |  |  |  |

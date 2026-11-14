@@ -19,6 +19,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 3. Transmit, PR 2 |  |  | To check: `address` (address choice, concede, Cannot Claim, answers and NACKs) and `requests` (sweep, Time/Date, VIN, identity, timeouts, no repeats) against NP-4 to NP-14 and LOG-9 |  |
 | 3. Transmit, PR 3 | 2026-11-14 | Vaughan Lynn | Reviewed before merge (reported in the Claude Code session): `session` bit-rate gate, restart guard, bus-state disable, claim and request wiring; the witness tests; step 3 marked merged |  |
 | 3. Transmit |  |  |  |  |
+| 7. Laptop tool, PR 3 |  |  | To check: `j1939ctl` (prompt pattern and warnings, retrieval: suffixes, cut, chain check, read-only), the report sections, the command reference in the user manual; header key fingerprints (LAP-8); step 7 marked merged |  |
 | 7. Laptop tool, PR 2 |  |  | To check: `cmdserver` (protocol checks, queue into the main loop, busy refusal, socket permissions 0660), `j1939cmd` (fingerprint, operator file, service-down answers), `main` (seeding the card, exit codes) |  |
 | 7. Laptop tool, PR 1 |  |  | To check: `status` (light priority, file), `admin` (restart and retrain), the `session` command handlers and unreviewed list, new versions applied from the next session, restart without `session_end` |  |
 | 7. Laptop tool, freeze |  |  | To check: `cmdserver`, `j1939cmd`, `j1939ctl`, `admin` and `status` marked "frozen for step 7"; DC-21 items 1 to 10 |  |
