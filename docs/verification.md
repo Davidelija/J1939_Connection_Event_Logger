@@ -71,19 +71,19 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-10 | T | 4 | `test_DET_10_etp_is_recognized_and_counted_not_reassembled`, `test_DET_10_dm_activity_and_etp_with_the_memory_transfer_flag`, `test_DET_10_no_memory_flag_without_dm14_to_dm16` | vcan | pass on vcan: DM activity and ETP transfers with the memory flag, in connection_end | 2026-11-14 | CI, PR step-4-session |
 | DET-11 | T | 4 | `test_DET_11_proprietary_pgns_listed` | vcan | pass on vcan: proprietary PGNs in connection_end | 2026-11-14 | CI, PR step-4-session |
 | DET-12 | T | 4 | `test_DET_12_known_name_sending_an_untrained_pgn_once_per_session`, `test_DET_12_approved_device_requesting_outside_its_trained_set`, `test_DET_12_switch_off_gives_no_new_pgn_records`, `test_DET_12_address_claim_is_never_a_new_pgn`, `test_DET_12_known_ecu_sending_a_new_pgn_in_the_session` | vcan | pass on vcan: known_device_new_pgn once per session per NAME, PGN and direction; address claims excluded; ORNL check still open | 2026-11-14 | CI, PR step-4-session |
-| DET-13 | T, A | 5 |  |  |  |  |  |
+| DET-13 | T, A | 5 | `test_DET_13_wake_window_decides_not_in_baseline_or_external`, `test_DET_13_not_in_baseline_is_reclassified_by_requests_or_leaving_early` | vcan | partial: wake timing and reclassification rules; identify built; wired into the session in step 5 PR 2; the X15 rig check (A) is open | 2026-11-14 | CI, PR step-5-identify |
 | DET-14 | T | 6 |  |  |  |  |  |
 | DET-15 | T | 4 | `test_DET_15_same_name_claiming_again_is_one_connection`, `test_DET_15_non_claiming_device_that_claims_keeps_its_connection`, `test_DET_15_returning_device_starts_a_new_connection` | vcan | pass (detect): keyed by NAME, or by SA until the device claims; a returning device starts a new connection | 2026-11-14 | CI, PR step-4-detect |
 | DET-16 | T | 1 | `test_DET_16_new_claim_gives_synced_chained_connection_start`, `test_DET_16_connection_start_within_2_s_on_vcan0` | vcan | pass: connection_start written and synced within 2 s of the claim on vcan0; new-device light in step 7 | 2026-11-13 | CI, PR step-1-logic |
 | DET-17 | T | 4 | `test_DET_17_approved_external_device_gets_info_short_form`, `test_DET_6_key_off_ends_every_open_connection` | vcan | pass on vcan: info start and short-form end for an approved device | 2026-11-14 | CI, PR step-4-session |
-| DET-18 | T | 5 |  |  |  |  |  |
+| DET-18 | T | 5 | `test_DET_18_*` | vcan | partial: trailer by NAME at notice, reclassified on requests, control PGNs, memory access or a known address; identify built; wired into the session in step 5 PR 2 | 2026-11-14 | CI, PR step-5-identify |
 | DET-19 | T | 1 | `test_DET_19_*`, `test_DET_19_pgn_table_is_bounded_and_the_rest_counted`, `test_DET_19_open_etp_transfers_are_bounded`, `test_DET_19_detect_never_raises_and_keeps_connections_consistent` | vcan | partial: decode limits; pgns_per_conn and open ETP transfers bounded in monitor; raw_mb_per_session in step 6 | 2026-11-14 | CI, PR step-4-detect |
 | IDN-1 | T | 1 | `test_IDN_1_*` | vcan | pass: NAME fields decoded as raw numbers (logger NAME, session 142 scan tool) | 2026-11-13 | CI, PR step-1-logic |
 | IDN-2 | I | 5 |  |  |  |  |  |
-| IDN-3 | T, A | 5 |  |  |  |  |  |
-| IDN-4 | T, A | 5 |  |  |  |  |  |
+| IDN-3 | T, A | 5 | `test_IDN_3_*` | vcan | partial: make and model precedence, disagreements, confidence from sources; identify built; wired into the session in step 5 PR 2; A in step 8 | 2026-11-14 | CI, PR step-5-identify |
+| IDN-4 | T, A | 5 | `test_IDN_4_*` | vcan | partial: function gate, Jaccard minus never-PGN penalties, tie margin, type ties, SA hints, profile match; matches the session 142 identification; identify built; wired into the session in step 5 PR 2 | 2026-11-14 | CI, PR step-5-identify |
 | IDN-5 | D | 5 / 8 |  |  |  |  |  |
-| IDN-6 | T | 5 |  |  |  |  |  |
+| IDN-6 | T | 5 | `test_IDN_6_connection_severity_by_category`, `test_IDN_6_identification_record_is_notice` | vcan | partial: severity by category, untrained cap; identify built; wired into the session in step 5 PR 2 | 2026-11-14 | CI, PR step-5-identify |
 | IDN-7 | T | — | Deferred, not built |  |  |  |  |
 | LOG-1 | I | 2 |  |  |  |  |  |
 | LOG-2 | T | 2 | `test_LOG_2_roll_over_continues_rec_and_chain_in_part_2`, `test_LOG_2_parts_are_checked_in_order_with_continuing_record_numbers` | vcan | pass: roll-over ends the part with session_end, the next part starts with session_start, rec and the chain continue (DC-10, DC-11); verifier checks parts in order | 2026-11-13 | CI, PR step-2-verify-demo |

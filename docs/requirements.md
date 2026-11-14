@@ -326,7 +326,7 @@ Defaults are those in `cfg-v3`. Each parameter lives in the versioned config fil
 | Confidence | high, medium, low |
 | Clock source | rtc, vehicle, elapsed |
 | Make source | self-reported, manufacturer code, library, none |
-| Classification rule | in inventory, wake timing, request activity, NAME. NAME is used in analysis only |
+| Classification rule | in inventory, wake timing, request activity, NAME. The logger writes NAME only for the trailer rule (DET-18, DC-18); otherwise NAME is used in analysis only |
 | VIN status | match, mismatch, unavailable; pending in `session_start` until the `vin_check` record (DC-12) |
 | Previous session end | clean, power loss, software restart, watchdog restart, software update |
 | Reset mode | restart, retrain, move, wipe |
