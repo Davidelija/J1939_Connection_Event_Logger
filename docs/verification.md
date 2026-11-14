@@ -31,16 +31,16 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-1 | T | 3 |  |  |  |  |  |
 | NP-2 | T | 3 |  |  |  |  |  |
 | NP-3 | T | 3 | `test_NP_3_*` | vcan | partial: bus-off and TX error-passive read from error frames; disable drops the queue; session wiring in PR 3 | 2026-11-13 | CI, PR step-3-transmit |
-| NP-4 | T | 3 |  |  |  |  |  |
-| NP-5 | I, T | 3 |  |  |  |  |  |
+| NP-4 | T | 3 | `test_NP_4_*` | vcan | partial: address choice from 247 down skipping inventory, claimed and reserved; witness in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-5 | I, T | 3 | `test_NP_5_logger_name_is_arbitrary_address_capable_and_maximal` | vcan | pass: the configured NAME is arbitrary-address-capable, on-highway, every other field at maximum | 2026-11-14 | CI, PR step-3-address-requests |
 | NP-6 | T | 3 | `test_NP_6_nothing_but_claims_for_250_ms_after_a_claim` | vcan | partial: transmit holds other traffic 250 ms after a claim; address module in PR 2 | 2026-11-13 | CI, PR step-3-transmit |
-| NP-7 | T | 3 |  |  |  |  |  |
-| NP-8 | T | 3 |  |  |  |  |  |
-| NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort`, `test_NP_9_*` | vcan | partial: decode asks for Connection Abort; transmit in step 3; partial: transmit guard refuses and turns off on every breach type, sends only allow-listed frames, CTS/EOMA for transfers to the logger; witness on vcan0 in step 3 PR 3 | 2026-11-13 | CI, PR step-3-transmit |
-| NP-11 | T | 3 |  |  |  |  |  |
-| NP-12 | T | 3 |  |  |  |  |  |
-| NP-13 | T | 3 |  |  |  |  |  |
-| NP-14 | T | 3 |  |  |  |  |  |
+| NP-7 | T | 3 | `test_NP_7_*` | vcan | partial: concedes, one more address, then Cannot Claim from 254; witness in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-8 | T | 3 | `test_NP_8_*` | vcan | partial: answers Request for Address Claim, NACKs other requests to the logger, ignores Commanded Address; witness in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort`, `test_NP_9_*`, `test_NP_9_never_requests_outside_the_request_allow_list` | vcan | partial: decode asks for Connection Abort; transmit in step 3; partial: transmit guard refuses and turns off on every breach type, sends only allow-listed frames, CTS/EOMA for transfers to the logger; witness on vcan0 in step 3 PR 3; requests never asks for a PGN outside the request allow-list | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-11 | T | 3 | `test_NP_11_*` | vcan | partial: sweep at start and every 10 minutes; session wiring in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-12 | T | 3 | `test_NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa` | vcan | partial: Time/Date and VIN to requests.vin_sa at start; vin_check in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-13 | T | 3 | `test_NP_13_known_name_is_not_asked_for_identity` | vcan | partial: identity requests only for SAs without a known NAME | 2026-11-14 | CI, PR step-3-address-requests |
+| NP-14 | T | 3 | `test_NP_14_*` | vcan | pass: 1.25 s timeout, one retry, reply/NACK/no reply recorded, failed requests not repeated | 2026-11-14 | CI, PR step-3-address-requests |
 | NP-15 | T | 3 | `test_NP_15_own_frames_and_replies_to_logger_are_marked`, `test_NP_15_frames_sent_through_the_handle_come_back_marked_own` | vcan | partial: decode marks own frames and replies; exclusion from detection in step 4; frames sent through capture's handle come back marked own (vcan0) | 2026-11-13 | CI, PR step-3-transmit |
 | NP-16 | T | 3 | `test_NP_16_*` | vcan | partial: no more than 10 frames in any 1 s, one outstanding request per destination, protocol first; witness in PR 3 | 2026-11-13 | CI, PR step-3-transmit |
 | NP-17 | T | 3 | `test_NP_17_no_bitrate_fault_gives_none_while_active`, `test_NP_17_can_missing_fault_raises_platform_error`, `test_NP_17_missing_interface_raises_can_missing`, `test_NP_17_interface_down_raises_can_down_from_read_batch`, `test_NP_17_can_down_fault_plan_reaches_read_batch`, `test_NP_17_missing_interface_raises_can_missing_on_start`, `test_NP_17_nothing_is_sent_before_transmit_is_enabled`, `test_NP_17_send_handle_without_a_socket_raises_can_down` | vcan | partial: desktop platform fault injection only; logger behaviour in step 3; capture raises can_missing and can_down; nothing sent before transmit is enabled | 2026-11-13 | CI, PR step-3-transmit |
@@ -62,7 +62,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (step 1 minimal detect, DC-9): a NAME not in the inventory opens a connection; full detect in step 4 | 2026-11-13 | CI, PR step-1-logic |
 | DET-2 | T | 4 |  |  |  |  |  |
 | DET-3 | T | 4 |  |  |  |  |  |
-| DET-4 | T | 4 |  |  |  |  |  |
+| DET-4 | T | 4 | `test_DET_4_own_claims_are_not_contests`, `test_NP_7_concedes_tries_once_more_then_cannot_claim` | vcan | partial: the logger's own claim loss is an address_conflict record; full DET-4 in step 4 | 2026-11-14 | CI, PR step-3-address-requests |
 | DET-5 | T | 4 |  |  |  |  |  |
 | DET-6 | T | 4 |  |  |  |  |  |
 | DET-7 | T | 4 |  |  |  |  |  |
@@ -93,7 +93,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-6 | I | 2 | `test_LOG_6_session_start_header_has_every_field` | vcan | partial: every header field present; VIN, address and restart guard are placeholders until step 3 (DC-11) | 2026-11-13 | CI, PR step-2-session |
 | LOG-7 | T | 4 |  |  |  |  |  |
 | LOG-8 | I | 7 |  |  |  |  |  |
-| LOG-9 | T | 3 |  |  |  |  |  |
+| LOG-9 | T | 3 | `test_LOG_9_first_sweep_is_logged_then_only_changes` | vcan | partial: sweep records for the first sweep and changes; written by session in PR 3 | 2026-11-14 | CI, PR step-3-address-requests |
 | LOG-10 | T | 6 | `test_LOG_10_ring_keeps_raw_before_s_plus_2_seconds`, `test_LOG_10_window_includes_both_ends` | vcan | partial: capture ring and window; rawcap in step 6 | 2026-11-13 | CI, PR step-1-logic |
 | LOG-11 | T | 6 |  |  |  |  |  |
 | LOG-12 | T | 2 | `test_LOG_12_*` | vcan | pass: clean end and power loss (bytes cut off) recognized at the next start; the summary gap is shown by the laptop in step 7 | 2026-11-13 | CI, PR step-2-session |

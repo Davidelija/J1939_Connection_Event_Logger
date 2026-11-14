@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-13, step 3 PR 1 (`transmit`, `capture` and `decode` v2).
+Last updated: 2026-11-14, step 3 PR 2 (`address`, `requests`).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -19,8 +19,8 @@ flowchart TB
     session["session 🟡"]; admin["admin 🟡"]
   end
   subgraph L3["3 · Logic"]
-    detect["detect 🟡"]; monitor["monitor ⬜"]; identify["identify ⬜"]; address["address ⬜"]
-    requests["requests ⬜"]; inventory["inventory ⬜"]; retention["retention ⬜"]; status["status ⬜"]
+    detect["detect 🟡"]; monitor["monitor ⬜"]; identify["identify ⬜"]; address["address ✅"]
+    requests["requests ✅"]; inventory["inventory ⬜"]; retention["retention ⬜"]; status["status ⬜"]
   end
   subgraph L2["2 · Pure"]
     decode["decode ✅"]; config["config ✅"]
@@ -54,8 +54,8 @@ flowchart TB
 | `detect.py` | 3 | Decides when a device connects, moves or ends. Now: a new NAME opens a connection with a wake-timing category. Full rules come in step 4. | 1, 4 | 🟡 |
 | `monitor.py` | 3 | What each connected device sends and requests: PGN tables, requests kept, DM activity, control-PGN flags. | 4 | ⬜ |
 | `identify.py` | 3 | What kind of device it is: category, type, make, model and confidence from NAME, identity replies and the device library. | 5 | ⬜ |
-| `address.py` | 3 | The logger's own address claim (128 to 247, always concedes). | 3 | ⬜ |
-| `requests.py` | 3 | The logger's requests: sweeps, Time/Date, VIN and identity, with timeouts and one retry. | 3 | ⬜ |
+| `address.py` | 3 | The logger's own address claim: from 247 down, skipping known, claimed and reserved addresses; always concedes; one more try, then Cannot Claim; answers Request for Address Claim, NACKs other requests to the logger, ignores Commanded Address. | 3 | ✅ |
+| `requests.py` | 3 | The logger's requests: the address-claim sweep at start and every 10 min (sweep records for the first and for changes), Time/Date and VIN to the VIN address, identity requests to devices without a known NAME; 1.25 s timeout and one retry; outcomes for `identify`; failed requests not repeated. | 3 | ✅ |
 | `inventory.py` | 3 | The known-good devices: training, approvals, removals, versions. | 6 | ⬜ |
 | `retention.py` | 3 | Keeps the card from filling: decides which raw captures may be freed; never session files. | 6 | ⬜ |
 | `status.py` | 3 | The status file and the one status light (fast blink beats slow blink beats steady). | 7 | ⬜ |
