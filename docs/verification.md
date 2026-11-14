@@ -113,7 +113,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-2 | D | 7 / 8 | `test_STS_2_high_events_stay_unreviewed_until_cleared` | vcan | partial: unreviewed high events kept in state.json and the light slow until cleared; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | STS-3 | I | 7 | `test_STS_3_status_file_has_the_example_fields`, `test_STS_3_the_status_file_is_kept_on_the_card` | vcan | partial: status-1 file on the card with the example fields plus transmit and vin_status; inspection in step 9 | 2026-11-14 | CI, PR step-7-status |
 | STS-4 | I, D | 8 |  |  |  |  |  |
-| STS-5 | D | 7 / 8 |  |  |  |  |  |
+| STS-5 | D | 7 / 8 | `test_STS_5_fingerprint_matches_ssh_keygen`, `test_STS_5_operator_names_come_from_the_fingerprint_file`, `test_STS_5_an_unknown_key_cannot_change_the_logger`, `test_STS_5_j1939cmd_reads_the_key_from_ssh_user_auth` | vcan | partial: operator from the SSH key fingerprint (matches ssh-keygen); unknown keys cannot change the logger; sshd, keys.sh and the wired port in step 8 (D) | 2026-11-14 | CI, PR step-7-cmdserver |
 | STS-7 | D | 7 |  |  |  |  |  |
 | STS-8 | I | 9 |  |  |  |  |  |
 | STS-9 | T | 7 | `test_STS_9_*`, `test_STS_9_config_push_saves_a_new_version_and_logs_the_change`, `test_STS_9_weakening_needs_confirm_and_is_high`, `test_STS_9_a_bad_config_is_rejected_and_logged` | vcan | partial: validation and records; config_push saves the next version, weakening needs confirm, rejections logged; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
@@ -130,7 +130,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
 | STS-22 | T | — | Deferred, not built |  |  |  |  |
-| STS-23 | T | 7 | `test_STS_23_replies_follow_the_protocol_and_refuse_with_a_next_step` | vcan | partial: protocol replies and refusals with a next step, one command at a time in the main loop; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| STS-23 | T | 7 | `test_STS_23_replies_follow_the_protocol_and_refuse_with_a_next_step`, `test_STS_23_*` | vcan | partial: protocol checks, one command at a time through the main loop, busy refusal, the Unix socket (CI), service-down answers for status and retrieve; the laptop in step 7 PR 3 | 2026-11-14 | CI, PR step-7-cmdserver |
 | LAP-1 | D | 8 |  |  |  |  |  |
 | LAP-2 | D | 7 |  |  |  |  |  |
 | LAP-3 | D | 7 |  |  |  |  |  |
@@ -144,7 +144,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LAP-12 | D | 7 |  |  |  |  |  |
 | LAP-13 | D | 7 |  |  |  |  |  |
 | LAP-14 | D | 6 / 7 |  |  |  |  |  |
-| LAP-15 | D | 7 |  |  |  |  |  |
+| LAP-15 | D | 7 | `test_STS_23_bad_requests_are_refused_with_the_next_step` | vcan | partial: every refusal has a reason and a next step and a non-zero exit code from j1939cmd; --help in j1939ctl (PR 3) | 2026-11-14 | CI, PR step-7-cmdserver |
 | LAP-16 | T | — | Deferred, not built |  |  |  |  |
 | LAP-17 | D | 7 |  |  |  |  |  |
 | HW-1 | I, T | 8 |  |  |  |  |  |

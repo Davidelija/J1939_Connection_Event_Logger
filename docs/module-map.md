@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, step 7 PR 1 (`status`, `admin`, command handlers).
+Last updated: 2026-11-14, step 7 PR 2 (`cmdserver`, `j1939cmd`, `main`).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -61,8 +61,9 @@ flowchart TB
 | `status.py` | 3 | The status file (`status-1`, written on the card at each state change) and the one status light: off while starting, fast blink for a fault, VIN mismatch, transmit off or a restart loop, slow blink for unreviewed events, training or a nearly full card, otherwise steady. | 7 | ✅ |
 | `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks; listen-only until the bit rate is confirmed, then normal mode, the address claim and the request schedule; transmit off on bus-off or error-passive; the restart guard; the VIN check; drives `detect` and `monitor` (the first-sweep signals, timed checks, `connection_end` before `session_end`); loads the device library and runs `identify` (identification, final identification, reclassification); training and the operator calls (train, confirm or reject, approve, remove), the VIN-mismatch switch, raw captures and retention; the laptop command handlers (`handle`), unreviewed events in `state.json`, the status file and light, new inventory and config versions from the next session. Status file and commands come in step 7. | 1–3, 7 | 🟡 |
 | `admin.py` | 4 | The diagnostic log (one line per event, repeats counted, rotated, restart causes) and the `reset` record for `restart` (exit code 75; the next session records a software restart) and `retrain` (the inventory archived, untrained from the next session). | 2, 7 | ✅ |
-| `main.py` | 5 | Service entry point. Now: reads and validates the config and inventory files and runs a session on the desktop platform. Later: the command socket (`cmdserver`). | 1, 7 | 🟡 |
-| `j1939cmd.py` | 5 | The logger-side program each laptop command runs over SSH; passes the request to the service over a Unix socket. | 7 | ⬜ |
+| `main.py` | 5 | Service entry point: loads the newest config and inventory from the card (seeding an empty card from `--config` and `--inventory`), runs the session with the command socket (`--socket`, `cmdserver`), and exits with 75 after an operator restart, 2 for a bad config. | 1, 7 | ✅ |
+| `cmdserver.py` | 5 | The command socket inside the service: one JSON request per connection, checked (protocol version, command, arguments), queued for the main loop and answered one at a time; a second command while one waits is refused as busy. | 7 | ✅ |
+| `j1939cmd.py` | 5 | The program each laptop command runs over SSH: maps the SSH key's fingerprint to an operator, forwards the request to the socket and prints the reply; when the service is down it answers `status` and the retrieve list from the card and refuses the rest with "logger not running". | 7 | ✅ |
 
 ## Tools and scripts
 

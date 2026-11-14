@@ -84,6 +84,7 @@ name = "Layers (docs/modules.md section 2)"
 type = "layers"
 layers = [
     "(main) : (j1939cmd)",
+    "(cmdserver)",
     "(session) : (admin)",
     "(detect) : (monitor) : (identify) : (address) : (requests) : (inventory) : (retention) : (status)",
     "(decode) : (config)",
