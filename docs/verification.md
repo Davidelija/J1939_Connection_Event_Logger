@@ -50,7 +50,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | TRN-3 | T | 6 | `test_TRN_3_training_stops_observing_at_the_timeout` | vcan | pass on vcan: observation stops at training.timeout_min; the proposal waits for train finish | 2026-11-14 | CI, PR step-6-session |
 | TRN-4 | D | 7 | `test_TRN_4_trained_inventory_is_saved_only_when_confirmed`, `test_TRN_4_rejected_inventory_is_not_applied` | vcan | partial: a proposal is saved only when confirmed, a rejection applies nothing (in-process calls); the laptop review and prompt in step 7 (D) | 2026-11-14 | CI, PR step-6-session |
 | TRN-5 | D | 7 |  |  |  |  |  |
-| TRN-6 | I | 6 |  | vcan | partial: each confirmed training, approval or removal is the next version tied to the VIN (inspection in step 8) | 2026-11-14 | CI, PR step-6-session |
+| TRN-6 | I | 6 | `test_TRN_6_a_saved_inventory_applies_from_the_next_session` | vcan | partial: each confirmed training, approval or removal is the next version tied to the VIN (inspection in step 8) | 2026-11-14 | CI, PR step-7-status |
 | TRN-7 | I | 6 |  |  |  |  |  |
 | TRN-9 | T | 6 | `test_TRN_9_untrained_session_caps_severity_at_notice`, `test_TRN_9_training_runs_detection_as_untrained` | vcan | pass on vcan: severity capped at notice without an inventory, during training and after a VIN mismatch; untrained header flag; needs-training light in step 7 | 2026-11-14 | CI, PR step-6-session |
 | TRN-10 | T | 6 | `test_TRN_10_*` | vcan | pass on vcan: PGN and address approvals from logged events save the next version; the laptop prompt and warning line in step 7 | 2026-11-14 | CI, PR step-6-session |
@@ -92,7 +92,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card`, `test_LOG_5_new_card_is_a_declared_break_not_a_failure` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions; verifier reports a new card as a declared break | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-6 | I | 2 | `test_LOG_6_session_start_header_has_every_field` | vcan | partial: every header field present; VIN, address and restart guard are placeholders until step 3 (DC-11) | 2026-11-13 | CI, PR step-2-session |
 | LOG-7 | T | 4 | `test_LOG_7_connection_records_for_new_devices_and_none_for_baseline_ecus` | vcan | partial: connection records for new and approved devices, none for baseline ECUs, with identification results; raw captures in step 6 | 2026-11-14 | CI, PR step-5-session |
-| LOG-8 | I | 7 |  |  |  |  |  |
+| LOG-8 | I | 7 | `test_LOG_8_login_and_logout_are_logged_with_the_operator` | vcan | partial: operator records written with operator and time; inspection in step 9 | 2026-11-14 | CI, PR step-7-status |
 | LOG-9 | T | 3 | `test_LOG_9_first_sweep_is_logged_then_only_changes`, `test_LOG_9_first_sweep_is_logged_then_only_changes` | vcan | pass on vcan: sweep records written by the session | 2026-11-14 | CI, PR step-3-session |
 | LOG-10 | T | 6 | `test_LOG_10_ring_keeps_raw_before_s_plus_2_seconds`, `test_LOG_10_window_includes_both_ends`, `test_LOG_10_window_runs_from_10_s_before_to_60_s_after_the_event`, `test_LOG_10_names_count_each_connections_captures`, `test_LOG_10_candump_format_for_extended_standard_remote_and_error_frames`, `test_LOG_10_open_captures_are_written_at_session_end`, `test_LOG_10_no_capture_once_the_session_budget_is_used`, `test_LOG_10_connection_start_names_its_raw_capture_and_the_file_is_written` | vcan | pass on vcan: raw captures from 10 s before to 60 s after each connection start and control flag, named in the record; every window contains its record's utc | 2026-11-14 | CI, PR step-6-session |
 | LOG-11 | T | 6 | `test_LOG_11_*` | vcan | partial: retention frees retrieved raw captures first, then unretrieved, oldest first, raw captures only, at session start and after each capture; the retrieved list and retrieval in step 7 | 2026-11-14 | CI, PR step-6-session |
@@ -102,24 +102,24 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-15 | T | 2 | `test_LOG_15_*`, `test_LOG_15_header_and_end_carry_buffer_size_and_kernel_drops` | vcan | partial: capture stats (buffer read back, kernel drops, frames by type) and kernel timestamps; session_start and session_end fields in step 2; session_start buffer size and session_end kernel drops | 2026-11-13 | CI, PR step-2-session |
 | LOG-16 | T | 2 | `test_LOG_16_fakeclock_*`, `test_LOG_16_now_reads_the_fake_clock`, `test_LOG_16_rtc_invalid_*`, `test_LOG_16_clock_jump_*`, `test_LOG_16_host_clock_used_without_fake_clock`, `test_LOG_16_parse_time_date`, `test_LOG_16_rtc_source_*`, `test_LOG_16_elapsed_*`, `test_LOG_16_never_waits_*`, `test_LOG_16_vehicle_time_*`, `test_LOG_16_first_time_date_*`, `test_LOG_16_skew_*`, `test_LOG_16_clock_jump_does_not_move_monotonic_timers`, `test_LOG_16_own_and_other_pgns_ignored`, `test_LOG_16_veh_time_is_none_before_time_date_then_whole_seconds`, `test_LOG_16_elapsed_s_counts_from_wake`, `test_LOG_16_without_valid_time_file_is_noclock_and_records_carry_elapsed_s` | vcan | partial: FakeClock and desktop `now()`/`rtc_ok()` only; `clock` module tests come with step 1 PR 2; clock module: source choice, vehicle offset, skew fault, jumps; clock v2 veh_time and elapsed_s (DC-10); no-clock session files and elapsed_s | 2026-11-13 | CI, PR step-2-session |
 | LOG-17 | T | 2 | `test_LOG_17_key_off_after_30_s_silence_then_new_session_on_next_frame` | vcan | partial: session ends after 30 s silence and the next frame opens a new session; open connections end with key-off in step 4 | 2026-11-13 | CI, PR step-2-session |
-| LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session`, `test_LOG_18_software_restart_cause_from_the_diagnostic_log` | vcan | partial: restart cause kept for the next session; the header in PR 2; next header records software restart | 2026-11-13 | CI, PR step-2-session |
+| LOG-18 | T | 2 | `test_LOG_18_restart_cause_is_read_back_by_the_next_session`, `test_LOG_18_software_restart_cause_from_the_diagnostic_log` | vcan | pass on vcan: restart cause read back; an operator restart leaves no session_end, so the next header says software restart | 2026-11-14 | CI, PR step-7-status |
 | LOG-19 | T, I | 2 | `test_LOG_19_unknown_formats_are_refused`, `test_LOG_19_unknown_format_is_refused` | vcan | partial: config, inventory and library refuse unknown formats; verifier in PR 3; verifier refuses an unknown session format (exit code 2) | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-20 | T | 2 | `test_LOG_20_*` | vcan | partial: diagnostic log format, repeat counting, rotation; session logging into it in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-21 | T | — | Deferred, not built |  |  |  |  |
 | LOG-22 | T | 6 | `test_LOG_22_*`, `test_LOG_22_card_write_error_gives_high_fault_and_keeps_old_file`, `test_LOG_22_storage_fault_is_logged_after_the_card_returns`, `test_LOG_22_no_capture_once_only_the_reserve_is_left`, `test_LOG_22_write_error_is_a_high_fault_not_an_exception`, `test_LOG_22_notice_at_warn_pct_once_per_session`, `test_LOG_22_only_the_reserve_left_stops_raw_captures_with_a_high_fault`, `test_LOG_22_retention_stops_raw_captures_when_only_the_reserve_is_left` | vcan | pass on vcan: notice at warn_pct, high fault and raw captures stopped when only the reserve is left, storage faults from eventlog, store and rawcap; the fault light in step 7 | 2026-11-14 | CI, PR step-6-session |
 | LOG-23 | T | 2 | `test_LOG_23_*` | vcan | partial: store writes atomically (temporary file, sync, rename, directory sync), never overwrites versions, ignores leftover temporary files; status file written by session in PR 2 | 2026-11-13 | CI, PR step-2-store-config |
 | LOG-24 | T | — | Deferred, not built |  |  |  |  |
-| STS-1 | D | 8 | `test_STS_1_set_light_*` | vcan | partial: desktop `set_light()` patterns only; light priority in step 7, A8 in step 8 | 2026-11-13 | CI, PR step-1-interfaces |
-| STS-2 | D | 7 / 8 |  |  |  |  |  |
-| STS-3 | I | 7 |  |  |  |  |  |
+| STS-1 | D | 8 | `test_STS_1_set_light_*`, `test_STS_1_light_priority_fast_over_slow_over_steady`, `test_STS_1_status_sets_the_light_on_change_and_writes_on_state_change` | vcan | partial: light priority and changes on the desktop platform; A8 on hardware (step 8) | 2026-11-14 | CI, PR step-7-status |
+| STS-2 | D | 7 / 8 | `test_STS_2_high_events_stay_unreviewed_until_cleared` | vcan | partial: unreviewed high events kept in state.json and the light slow until cleared; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| STS-3 | I | 7 | `test_STS_3_status_file_has_the_example_fields`, `test_STS_3_the_status_file_is_kept_on_the_card` | vcan | partial: status-1 file on the card with the example fields plus transmit and vin_status; inspection in step 9 | 2026-11-14 | CI, PR step-7-status |
 | STS-4 | I, D | 8 |  |  |  |  |  |
 | STS-5 | D | 7 / 8 |  |  |  |  |  |
 | STS-7 | D | 7 |  |  |  |  |  |
 | STS-8 | I | 9 |  |  |  |  |  |
-| STS-9 | T | 7 | `test_STS_9_*` | vcan | partial: validation, allow-list and move-grace rejection, weakening flags and records; push from the laptop in step 7 | 2026-11-13 | CI, PR step-2-store-config |
+| STS-9 | T | 7 | `test_STS_9_*`, `test_STS_9_config_push_saves_a_new_version_and_logs_the_change`, `test_STS_9_weakening_needs_confirm_and_is_high`, `test_STS_9_a_bad_config_is_rejected_and_logged` | vcan | partial: validation and records; config_push saves the next version, weakening needs confirm, rejections logged; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | STS-10 | T | — | Deferred, not built |  |  |  |  |
-| STS-11 | T | 7 |  |  |  |  |  |
-| STS-12 | T | 7 |  |  |  |  |  |
+| STS-11 | T | 7 | `test_STS_11_restart_logs_reset_and_ends_with_exit_code_75` | vcan | partial: reset record, exit code 75, the next session records a software restart; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| STS-12 | T | 7 | `test_STS_12_retrain_runs_the_next_session_untrained` | vcan | partial: reset record, inventory archived, next session untrained; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | STS-13 | T | — | Deferred, not built |  |  |  |  |
 | STS-14 | T | — | Deferred, not built |  |  |  |  |
 | STS-15 | T | — | Deferred, not built |  |  |  |  |
@@ -130,17 +130,17 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | STS-20 | T | 8 |  |  |  |  |  |
 | STS-21 | T | — | Deferred, not built |  |  |  |  |
 | STS-22 | T | — | Deferred, not built |  |  |  |  |
-| STS-23 | T | 7 |  |  |  |  |  |
+| STS-23 | T | 7 | `test_STS_23_replies_follow_the_protocol_and_refuse_with_a_next_step` | vcan | partial: protocol replies and refusals with a next step, one command at a time in the main loop; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | LAP-1 | D | 8 |  |  |  |  |  |
 | LAP-2 | D | 7 |  |  |  |  |  |
 | LAP-3 | D | 7 |  |  |  |  |  |
-| LAP-4 | T | 7 |  |  |  |  |  |
-| LAP-5 | T | 7 |  |  |  |  |  |
+| LAP-4 | T | 7 | `test_LAP_4_clear_needs_unreviewed_ids_and_a_reason` | vcan | partial: clear on unreviewed IDs with a reason, review_clear logged; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
+| LAP-5 | T | 7 | `test_LAP_5_retrieved_files_are_logged_and_listed` | vcan | partial: file list with sizes and hashes, retrieval record, retrieved files in state.json and status; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | LAP-6 | T | 7 |  |  |  |  |  |
 | LAP-8 | T | 7 |  |  |  |  |  |
 | LAP-9 | T | 7 |  |  |  |  |  |
 | LAP-10 | D | 7 |  |  |  |  |  |
-| LAP-11 | T | 7 |  |  |  |  |  |
+| LAP-11 | T | 7 | `test_LAP_11_approve_clears_its_event_in_the_same_step` | vcan | partial: approval clears its source event; the socket and j1939cmd in step 7 PR 2, the laptop in PR 3 | 2026-11-14 | CI, PR step-7-status |
 | LAP-12 | D | 7 |  |  |  |  |  |
 | LAP-13 | D | 7 |  |  |  |  |  |
 | LAP-14 | D | 6 / 7 |  |  |  |  |  |

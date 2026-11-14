@@ -1,8 +1,10 @@
-"""admin: the diagnostic log (step 2 minimal form, DC-10).
+"""admin: restart, retrain and the diagnostic log (v1, frozen for step 7).
 
-Layer 4. ``admin`` owns restart, retrain and the diagnostic log; restart and
-retrain come in step 7. This is the diagnostic-log writer (LOG-20), built in
-step 2:
+Layer 4. ``reset_record(mode, ...)`` builds the ``reset`` record for
+``restart`` and ``retrain`` (STS-11, STS-12, DC-21); ``session`` carries them out:
+a restart ends the process with ``RESTART_EXIT`` (75) for systemd to restart it,
+and a retrain sets ``inventory_active: false`` in ``state.json``. The
+diagnostic-log writer (LOG-20) was built in step 2:
 
 * One line per event: ``<utc> <level> <module> <message>`` (docs/modules.md
   section 1), with ``+<seconds>s`` since wake in place of the UTC time while no
@@ -28,13 +30,37 @@ from typing import Optional
 
 from j1939logger.clock import Clock
 from j1939logger.platform.interface import Platform
-from j1939logger.types import PlatformError
+from j1939logger.types import PlatformError, Record
 
-__all__ = ["DiagLog", "LEVELS", "RESTART_CAUSES"]
+__all__ = [
+    "DiagLog",
+    "LEVELS",
+    "RESTART_CAUSES",
+    "RESTART_EXIT",
+    "RESET_MODES_BUILT",
+    "reset_record",
+]
 
 LEVELS = ("error", "warning", "info", "debug")
 RESTART_CAUSES = ("software restart", "watchdog restart")
 _RESTART_TAG = "restart cause: "
+RESTART_EXIT = 75  # restart: systemd restarts the service (DC-21)
+RESET_MODES_BUILT = ("restart", "retrain")  # move and wipe are Deferred
+
+
+def reset_record(mode: str, operator: str, reason: str, archived: Optional[str] = None) -> Record:
+    """The ``reset`` record (notice) for ``restart`` or ``retrain`` (STS-11, STS-12)."""
+    if mode not in RESET_MODES_BUILT:
+        raise ValueError(f"reset mode must be one of {RESET_MODES_BUILT}: {mode!r}")
+    if not reason:
+        raise ValueError("a reason is required")
+    return Record(
+        "reset",
+        "notice",
+        None,
+        None,
+        {"operator": operator, "mode": mode, "reason": reason, "archived": archived},
+    )
 
 
 class DiagLog:
