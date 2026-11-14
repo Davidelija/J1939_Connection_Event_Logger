@@ -35,7 +35,7 @@
       ],
       "states_seen": [
         "key-on engine off",
-        "engine running",
+        "idle",
         "driving"
       ],
       "self_reported": {
@@ -88,7 +88,7 @@
       ],
       "states_seen": [
         "key-on engine off",
-        "engine running",
+        "idle",
         "driving"
       ],
       "self_reported": {
@@ -129,7 +129,7 @@
       ],
       "states_seen": [
         "key-on engine off",
-        "engine running",
+        "idle",
         "driving"
       ],
       "self_reported": {
@@ -170,7 +170,7 @@
       ],
       "states_seen": [
         "key-on engine off",
-        "engine running",
+        "idle",
         "driving"
       ],
       "self_reported": {
