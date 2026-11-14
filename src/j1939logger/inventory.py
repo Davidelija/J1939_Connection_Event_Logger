@@ -241,7 +241,7 @@ class Training:
         """The proposed inventory (DC-20 item 4), not applied until confirmed (TRN-4)."""
         stored = list(stored)
         old = {e.get("name"): e for e in (previous or {}).get("entries", []) if e.get("name")}
-        next_id = next_entry_id(stored)
+        next_id = next_entry_id([*stored, previous or {}])  # never reuse an ID
         pto = self._labels[3] if len(self._labels) > 3 else "PTO"
         entries = []
         for _key, seen in sorted(self._seen.items(), key=lambda kv: (kv[0][0], kv[0][1])):

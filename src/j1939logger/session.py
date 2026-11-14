@@ -66,9 +66,20 @@ from j1939logger.identify import (
     identify,
     reclassify,
 )
+from j1939logger.inventory import (
+    InventoryRefused,
+    Training,
+    approve,
+    confirm_record,
+    next_version,
+    rejection_record,
+    remove,
+)
 from j1939logger.monitor import Monitor
 from j1939logger.platform.interface import Platform
+from j1939logger.rawcap import RawCap
 from j1939logger.requests import PGN_VIN, RequestOutcome, Requests
+from j1939logger.retention import RawFile, Retention
 from j1939logger.store import Store
 from j1939logger.transmit import Transmit
 from j1939logger.types import Connection, Frame, J1939Msg, Name, PlatformError, Record, TxRequest
@@ -139,6 +150,11 @@ CONNECTION_END_REASON = {
 }
 
 
+def _version_number(version: str) -> Optional[int]:
+    m = re.match(r"^inv-v(\d+)$", version)
+    return int(m.group(1)) if m else None
+
+
 @dataclass
 class _Ident:
     """What session keeps per connection for identify (step 5, DC-17)."""
@@ -199,6 +215,12 @@ class Session:
         self.library: Optional[Library] = None
         self._library_fault: Optional[str] = None
         self._idents: dict[int, _Ident] = {}
+        self.rawcap: Optional[RawCap] = None
+        self.retention: Optional[Retention] = None
+        self.training: Optional[Training] = None
+        self._proposal: Optional[dict[str, Any]] = None
+        self._dropped = False  # inventory dropped for the session (VIN mismatch, training)
+        self._vin_received: Optional[str] = None
         self._end_sets: dict[int, frozenset[int]] = {}
         baseline = inventory.entries if inventory is not None else ()
         self._known_addresses = {
@@ -307,6 +329,7 @@ class Session:
             self._run_requests()
             self._collect()
             self._detection()
+            self._raw_poll()
         self._timers()
         self._drain_faults()
         return len(frames)
@@ -369,10 +392,20 @@ class Session:
                 self._log(record)
             for outcome in self.requests.take_outcomes():
                 if outcome.pgn == PGN_VIN and outcome.conn is None:
-                    self._log(self._vin_check(outcome))
+                    check = self._vin_check(outcome)
+                    self._log(check)
+                    if check.fields["vin_status"] == "mismatch":
+                        self._vin_mismatch(check)
                 else:
                     self.outcomes.append(outcome)
                     self._identity_outcome(outcome)
+                    if self.training is not None:
+                        self.training.identity(
+                            outcome.da, outcome.pgn, outcome.outcome, outcome.value
+                        )
+        if self.rawcap is not None:
+            for fault in self.rawcap.take_faults():
+                self._log(fault)
         if self.transmit is not None:
             for fault in self.transmit.take_faults():
                 self.diag.log("error", "transmit", str(fault.fields.get("cause")))
@@ -380,6 +413,7 @@ class Session:
 
     def _vin_check(self, outcome: RequestOutcome) -> Record:
         vin = _vin_text(outcome.value) if outcome.outcome == "reply" else None
+        self._vin_received = vin
         if vin is None:
             status = "unavailable"
         elif self._inventory_vin is None:
@@ -419,6 +453,8 @@ class Session:
         self._decode_stats = stats
         if self.logger_sa is not None:
             self._submit((req, self.logger_sa) for req in tx)
+        if self.rawcap is not None:
+            self.rawcap.feed(frames)
         for msg in msgs:
             self._on_message(msg)
 
@@ -436,11 +472,18 @@ class Session:
         if self.monitor is not None:  # after detect, so a new connection is already open
             conn, entry = self.detect.connection_for(msg.sa), self.detect.entry_for(msg.sa)
             for record in self.monitor.on_message(msg, conn, entry):
+                if record.type == "control_flag" and record.conn is not None:
+                    record.fields["raw_capture"] = self._raw_start(record.conn, msg.ts_mono)
                 self._log(record, msg.ts_mono)
+        if self.training is not None:
+            self.training.observe(msg)
 
     def _log_detection(self, record: Record, ts_mono: Optional[float] = None) -> None:
         if record.type == "connection_end":
             self._final_identification(record)
+        if record.type == "connection_start" and record.conn is not None:
+            at = ts_mono if ts_mono is not None else self.clock.mono()
+            record.fields["raw_capture"] = self._raw_start(record.conn, at)  # LOG-10
         self._log(record, ts_mono)
         if record.type != "connection_start":
             return
@@ -455,7 +498,305 @@ class Session:
         if self.requests is not None and record.conn is not None:
             name = record.fields.get("name")
             value = int(name, 16) if isinstance(name, str) else None
+            if self._dropped:
+                value = None  # ask every device (NP-13 during training; DET-14 untrained)
             self.requests.identify(record.conn, int(record.fields["sa"]), value)
+
+    @property
+    def _untrained(self) -> bool:
+        """Untrained (TRN-9): no inventory, or dropped for this session (DET-14, training)."""
+        return self._inventory is None or self._dropped
+
+    # -- raw captures and retention (step 6, DC-20) ---------------------------------
+
+    def _raw_start(self, conn: int, ts_mono: float) -> Optional[str]:
+        """Start a raw capture for an event; the name for ``raw_capture`` or None (LOG-10)."""
+        if self.rawcap is None:
+            return None
+        before = self.capture.window(ts_mono - self.rawcap.before_s, ts_mono)
+        return self.rawcap.start(conn, ts_mono, before)
+
+    def _raw_poll(self) -> None:
+        if self.rawcap is None:
+            return
+        if self.rawcap.poll(self.clock.mono()):
+            self._retention()  # after each raw capture (DC-20)
+
+    def _raw_files(self) -> list[RawFile]:
+        folder = self._platform.paths().card / "raw"
+        out = []
+        for p in sorted(folder.glob("*.log")) if folder.is_dir() else []:
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            out.append(RawFile(p, st.st_mtime, st.st_size, retrieved=False))  # step 7: retrieved
+        return out
+
+    def _retention(self) -> None:
+        """Free raw captures when the card runs low; faults; stop captures at the reserve."""
+        if self.retention is None:
+            return
+        try:
+            usage = self.store.usage()
+        except OSError:
+            return
+        plan = self.retention.check(usage, self._raw_files())
+        if plan.free:
+            self.store.free(plan.free)
+        for fault in plan.faults:
+            self._log(fault)
+        if not plan.raw_allowed and self.rawcap is not None:
+            self.rawcap.stop("card full; only the event reserve is left")  # LOG-22
+
+    # -- VIN mismatch (DET-14) ------------------------------------------------------
+
+    def _vin_mismatch(self, check: Record) -> None:
+        self._log(
+            Record(
+                "vin_mismatch",
+                "high",  # not capped (log-format severity rules)
+                None,
+                None,
+                {
+                    "vin": check.fields["vin"],
+                    "inventory_vin": check.fields["inventory_vin"],
+                    "inventory": check.fields["inventory"],
+                    "logger_action": "rest of the session runs untrained",
+                },
+            )
+        )
+        self._drop_inventory()
+
+    def _drop_inventory(self) -> None:
+        self._dropped = True
+        if self.detect is not None:
+            self.detect.drop_inventory()
+        if self.monitor is not None:
+            self.monitor.drop_inventory()
+
+    # -- operator calls (DC-20; step 7's cmdserver calls these) --------------------
+
+    def _now_text(self) -> Optional[str]:
+        return format_utc(self.clock.to_utc(self.clock.mono()))
+
+    def _stored_inventories(self) -> list[dict[str, Any]]:
+        out = []
+        for v in self.store.versions("inventory"):
+            data = self.store.load("inventory", v)
+            try:
+                doc = json.loads(data.decode("utf-8")) if data is not None else None
+            except (ValueError, UnicodeDecodeError):
+                doc = None
+            if isinstance(doc, dict):
+                out.append(doc)
+        return out
+
+    def _inventory_doc(self) -> Optional[dict[str, Any]]:
+        """The inventory that operator changes build on: the newest saved version, so changes
+        made in one session chain (each still applies from the next session), else the active
+        inventory as an ``inv-1`` dict."""
+        if self._inventory is None:
+            return None
+        active = _version_number(self._inventory.version)
+        newest = None
+        for doc in self._stored_inventories():
+            n = _version_number(str(doc.get("inventory")))
+            if n is not None and (newest is None or n > newest[0]):
+                newest = (n, doc)
+        if newest is not None and (active is None or newest[0] >= active):
+            return newest[1]
+        return {
+            "format": "inv-1",
+            "inventory": self._inventory.version,
+            "vin": self._inventory.vin,
+            "entries": [dict(e.raw) for e in self._inventory.entries],
+        }
+
+    def _next_inventory_version(self) -> str:
+        numbers = set(self.store.versions("inventory"))
+        if self._inventory is not None:
+            m = re.match(r"^inv-v(\d+)$", self._inventory.version)
+            if m:
+                numbers.add(int(m.group(1)))
+        if self._proposal is not None:
+            m = re.match(r"^inv-v(\d+)$", str(self._proposal.get("inventory")))
+            if m:
+                numbers.add(int(m.group(1)))
+        return next_version(numbers)
+
+    def _write_inventory(self, doc: dict[str, Any]) -> bool:
+        """Save a new version through store; it applies from the next session (DC-20)."""
+        data = (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        return self.store.write_atomic("inventory", str(doc["inventory"]), data)
+
+    def train_start(self, operator: str) -> None:
+        """Start training (TRN-2): observe every device; this session runs untrained."""
+        if self.eventlog is None or self.detect is None:
+            raise InventoryRefused("no session is open")
+        now = self.clock.mono()
+        self.training = Training(self._settings, now, self._logger_name, operator)
+        for sa in range(254):  # NAMEs already claimed this session
+            name = self.detect.name_at(sa)
+            if name is not None:
+                data = name.to_bytes(8, "little")
+                self.training.observe(
+                    J1939Msg(now, 0.0, 6, 60928, sa, 255, data, False, False, False)
+                )
+        self._proposal = None
+        self._drop_inventory()  # detection runs as in untrained mode during training
+        self._log(
+            Record(
+                "training_start",
+                "notice",
+                None,
+                None,
+                {"operator": operator, "states": list(self._settings["training.states"])},
+            )
+        )
+
+    def train_finish(self, operator: str, pto_declared: bool = False) -> dict[str, Any]:
+        """Stop training and return the proposed inventory; not applied until confirmed (TRN-4)."""
+        if self.training is None:
+            raise InventoryRefused("training is not running")
+        t = self.training
+        t.observing(self.clock.mono())
+        timed_out = t.timed_out
+        t.stopped = True
+        lib = self.library.manufacturers if self.library is not None else None
+        proposal = t.propose(
+            previous=self._inventory_doc(),
+            stored=self._stored_inventories(),
+            version=self._next_inventory_version(),
+            vin=self._vin_received,
+            session=self._session,
+            now_utc=self._now_text(),
+            manufacturers=lib,
+            pto_declared=pto_declared,
+        )
+        coverage = t.coverage(pto_declared)
+        self._log(
+            Record(
+                "training_finish",
+                "notice",
+                None,
+                None,
+                {
+                    "operator": operator,
+                    "states_covered": coverage["conditions"],
+                    "inventory_proposed": proposal["inventory"],
+                    "coverage": coverage,
+                    "timed_out": timed_out,
+                },
+            )
+        )
+        self.training = None
+        self._proposal = proposal
+        return proposal
+
+    def confirm_inventory(
+        self, operator: str, apply: bool, reason: Optional[str] = None
+    ) -> Optional[str]:
+        """Apply (save) or reject the proposed inventory; the new version, or None (TRN-4)."""
+        if self._proposal is None:
+            raise InventoryRefused("no proposed inventory")
+        proposal, self._proposal = self._proposal, None
+        if not apply:
+            self._log(rejection_record(proposal, operator, reason))
+            return None
+        if not self._write_inventory(proposal):
+            raise InventoryRefused("the new inventory could not be saved")
+        self._log(confirm_record(proposal, operator, reason))
+        return str(proposal["inventory"])
+
+    def _find_event(self, event_id: str) -> tuple[dict[str, Any], Optional[dict[str, Any]]]:
+        """The logged record for ``session-rec``, and its connection_end if it has one."""
+        m = re.match(r"^(\d+)-(\d+)$", event_id)
+        if m is None:
+            raise InventoryRefused(f"bad event ID {event_id}")
+        session, rec = int(m.group(1)), int(m.group(2))
+        records: list[dict[str, Any]] = []
+        for f in session_files(self._sessions_dir):
+            if f.session != session:
+                continue
+            for line in f.path.read_text(encoding="utf-8").splitlines():
+                try:
+                    records.append(json.loads(line))
+                except ValueError:
+                    continue  # an incomplete last line
+        event = next((r for r in records if r.get("rec") == rec), None)
+        if event is None:
+            raise InventoryRefused(f"event {event_id} not found")
+        end = None
+        if event.get("type") == "connection_start":
+            end = next(
+                (
+                    r
+                    for r in records
+                    if r.get("type") == "connection_end" and r.get("conn") == event.get("conn")
+                ),
+                None,
+            )
+        return event, end
+
+    def approve(
+        self, event_id: str, operator: str, reason: str, warning_shown: bool = False
+    ) -> str:
+        """Approve a logged device, new PGN or address change (TRN-5, TRN-10); the new version."""
+        doc = self._inventory_doc()
+        if doc is None:
+            raise InventoryRefused("no inventory to approve into (untrained)")
+        event, end = self._find_event(event_id)
+        version = self._next_inventory_version()
+        new, record = approve(
+            doc,
+            event,
+            event_id=event_id,
+            end=end,
+            stored=self._stored_inventories(),
+            version=version,
+            operator=operator,
+            reason=reason,
+            session=self._session,
+            now_utc=self._now_text(),
+            warning_shown=warning_shown,
+            control_pgns=self._settings["detection.control_pgns"],
+        )
+        if not self._write_inventory(new):
+            raise InventoryRefused("the new inventory could not be saved")
+        self._log(record)
+        return version
+
+    def remove(
+        self,
+        entry_id: str,
+        operator: str,
+        reason: str,
+        pgn: Optional[int] = None,
+        direction: Optional[str] = None,
+        warning_shown: bool = False,
+    ) -> str:
+        """Remove an entry or one of its PGNs (TRN-14, TRN-15); the new version."""
+        doc = self._inventory_doc()
+        if doc is None:
+            raise InventoryRefused("no inventory to remove from (untrained)")
+        version = self._next_inventory_version()
+        new, record = remove(
+            doc,
+            entry_id,
+            version=version,
+            operator=operator,
+            reason=reason,
+            session=self._session,
+            now_utc=self._now_text(),
+            pgn=pgn,
+            direction=direction,
+            warning_shown=warning_shown,
+        )
+        if not self._write_inventory(new):
+            raise InventoryRefused("the new inventory could not be saved")
+        self._log(record)
+        return version
 
     # -- identification (step 5, DC-17) -------------------------------------------
 
@@ -467,7 +808,7 @@ class Session:
             since_s,
             wake_window_s=float(self._settings["classify.wake_window_s"]),
             trailer_vehicle_system=int(self._settings["classify.trailer_vehicle_system"]),
-            untrained=self._inventory is None,
+            untrained=self._untrained,
             what=what,
         )
 
@@ -509,7 +850,7 @@ class Session:
             sent=sent,
             classification_rule=state.rule,
             reclassified=reason,
-            untrained=self._inventory is None,
+            untrained=self._untrained,
         )
 
     def _identify(self, state: _Ident) -> None:
@@ -729,6 +1070,10 @@ class Session:
         )
         self._idents = {}
         self._end_sets = {}
+        self._dropped = False
+        self._vin_received = None
+        self.rawcap = RawCap(self._platform, self._settings, session)
+        self.retention = Retention(self._settings)
         self._no_sweep_sent = False
         self._connections_started = 0
         self.transmit = Transmit(self._platform, self.clock, self._settings, self._logger_name)
@@ -794,6 +1139,7 @@ class Session:
         self._try_bitrate()
         self._settle_header()
         self._write_state(session)
+        self._retention()  # at session start (DC-20)
         self.diag.log("info", "session", f"session {session} started ({wake})")
 
     def _settle_header(self) -> None:
@@ -863,7 +1209,7 @@ class Session:
             if self._guard_holds
             else "not triggered",
             "operator_keys": keys,
-            "untrained": self._inventory is None,
+            "untrained": self._untrained,
             "raw_dir": "raw/",
         }
         return Record("session_start", "info", None, None, fields)
@@ -910,6 +1256,10 @@ class Session:
             self._settle_header()
         self._collect()
         self._end_connections(CONNECTION_END_REASON.get(reason, "software restart"))
+        if self.rawcap is not None:
+            self.rawcap.close()  # open captures with what they have
+            for fault in self.rawcap.take_faults():
+                self._log(fault)
         self._log(self._session_end(reason))
         self.eventlog.sync_now()
         self.eventlog.close()
@@ -921,6 +1271,9 @@ class Session:
         self.eventlog = None
         self.detect = None
         self.monitor = None
+        self.rawcap = None
+        self.retention = None
+        self.training = None
         self.transmit = None
         self.address = None
         self.requests = None

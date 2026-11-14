@@ -125,7 +125,8 @@ def test_DET_6_key_off_ends_the_connection_before_session_end(tmp_path: Path) ->
     assert end["end"] < end["utc"]  # the end is the last frame, recorded at key-off
     assert abs(end["duration_s"] - (last - (last - 1.0))) < 0.2
     flag = next(r for r in recs if r["type"] == "control_flag")
-    assert (flag["via"], flag["target_sa"], flag["raw_capture"]) == ("requested", 0, None)
+    assert (flag["via"], flag["target_sa"]) == ("requested", 0)
+    assert flag["raw_capture"] == "raw/s000001_c1_e2.log"  # rawcap, step 6 (DC-20)
     session_end = next(r for r in recs if r["type"] == "session_end")
     assert session_end["connections"] == 1
 

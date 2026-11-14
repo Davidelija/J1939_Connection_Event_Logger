@@ -170,6 +170,11 @@ class Detect:
             return self._hint.get(sa)
         return None
 
+    def drop_inventory(self) -> None:
+        """No inventory matches for the rest of this session (v1.3, DC-20)."""
+        self._by_name, self._never_claims, self._hint = {}, {}, {}
+        self._untrained = True
+
     def _provisional(self) -> bool:
         return self._waiting or self._no_sweep
 
