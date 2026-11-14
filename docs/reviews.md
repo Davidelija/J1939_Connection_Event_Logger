@@ -19,6 +19,7 @@ One line per build step, completed by a team member who reviewed the code Claude
 | 3. Transmit, PR 2 |  |  | To check: `address` (address choice, concede, Cannot Claim, answers and NACKs) and `requests` (sweep, Time/Date, VIN, identity, timeouts, no repeats) against NP-4 to NP-14 and LOG-9 |  |
 | 3. Transmit, PR 3 | 2026-11-14 | Vaughan Lynn | Reviewed before merge (reported in the Claude Code session): `session` bit-rate gate, restart guard, bus-state disable, claim and request wiring; the witness tests; step 3 marked merged |  |
 | 3. Transmit |  |  |  |  |
+| 7. Laptop tool, PR 1 |  |  | To check: `status` (light priority, file), `admin` (restart and retrain), the `session` command handlers and unreviewed list, new versions applied from the next session, restart without `session_end` |  |
 | 7. Laptop tool, freeze |  |  | To check: `cmdserver`, `j1939cmd`, `j1939ctl`, `admin` and `status` marked "frozen for step 7"; DC-21 items 1 to 10 |  |
 | 6. Training and inventory, PR 3 |  |  | To check: `session` operator calls (train, confirm or reject, approve, remove) and the versions they write; training runs untrained; the VIN-mismatch switch; raw captures named in `connection_start` and `control_flag`; retention at session start and after captures; step 6 marked merged |  |
 | 6. Training and inventory, PR 2 |  |  | To check: `rawcap` (window, names, candump format, budget, write faults) and `retention` (freeing order, raw captures only, warn and reserve faults) against LOG-10, LOG-11, LOG-22 and DC-20 |  |
