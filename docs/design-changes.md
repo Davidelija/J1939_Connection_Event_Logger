@@ -31,6 +31,15 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-15 — PGNs sent count the carried PGN, not TP.CM and TP.DT  (accepted, 2026-11-14)
+- **Raised by:** Claude Code, step 4 PR 1 (`monitor`), pull request #14 (gap 1)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("fix the example", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Change:** `connection_end.pgns_sent` counts the PGN each message carries. A transport-protocol transfer counts once, as its reassembled PGN; TP.CM (60416) and TP.DT (60160) frames are not counted, because `decode` v2 does not return them as messages. In the session 142 example, rec 9 loses its TP.CM and TP.DT rows and gains `pgns_dropped: 0` (DC-13). The chain is recomputed from rec 9, and the `retrieval` record's `last_hash` follows it.
+- **Why:** the example listed TP.CM and TP.DT counts that no module produces. DET-7 asks for "each distinct PGN it sends", which is the carried PGN. Keeping `decode` as it is avoids a decode contract change and transport frames reaching `detect` and `monitor`.
+- **Affects:** DET-7; `docs/log-format.md` (`connection_end` PGNs sent); `docs/examples/s000142_20261106T140211Z.jsonl` (rec 9; chain from rec 9). No contract change. Format stays `log-1`.
+- **Docs updated in the same change:** the files above; `CHANGELOG.md`.
+- **Tests:** `test_DET_7_summary_matches_the_example_connection_end_fields`, `test_LOG_5_example_session_142_hash_chain_verifies`.
+
 ## DC-14 — Monitor record fields: control_flag `via` and `raw_capture`, connection_end list entries  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 PR 1 (`monitor`), branch `step-4-monitor`
 - **Decided by:** Vaughan Lynn, 2026-11-14 (all seven items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)

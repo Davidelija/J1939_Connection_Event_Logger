@@ -58,6 +58,7 @@ from j1939logger.config import Inventory
 from j1939logger.decode import bus_state, decode, new_state
 from j1939logger.detect import Detect
 from j1939logger.eventlog import ZERO_HASH, EventLog, format_utc, scan_tail
+from j1939logger.monitor import Monitor
 from j1939logger.platform.interface import Platform
 from j1939logger.requests import PGN_VIN, RequestOutcome, Requests
 from j1939logger.store import Store
@@ -123,6 +124,13 @@ def _vin_text(value: Optional[bytes]) -> Optional[str]:
     return text or None
 
 
+# session_end reason -> Connection end reason for the connections still open (DET-6).
+CONNECTION_END_REASON = {
+    "key-off, bus silent": "key-off",
+    "service stopped": "software restart",
+}
+
+
 class Session:
     def __init__(
         self,
@@ -159,6 +167,9 @@ class Session:
         self._stop = threading.Event()
         self.eventlog: Optional[EventLog] = None
         self.detect: Optional[Detect] = None
+        self.monitor: Optional[Monitor] = None
+        self._no_sweep_sent = False
+        self._connections_started = 0
         self.transmit: Optional[Transmit] = None
         self.address: Optional[Address] = None
         self.requests: Optional[Requests] = None
@@ -246,6 +257,7 @@ class Session:
             self._settle_header()
             self._run_requests()
             self._collect()
+            self._detection()
         self._timers()
         self._drain_faults()
         return len(frames)
@@ -370,14 +382,54 @@ class Session:
         if self.requests is not None:
             self.requests.on_message(msg, self.logger_sa)
         for record in self.clock.on_time_date(msg) + self.detect.on_message(msg, self.logger_sa):
-            self._log(record, msg.ts_mono)
-            if record.type == "connection_start":
-                if self.eventlog is not None and not self._header_pending:
-                    self.eventlog.sync_now()  # DET-16
-                if self.requests is not None and record.conn is not None:
-                    name = record.fields.get("name")
-                    value = int(name, 16) if isinstance(name, str) else None
-                    self.requests.identify(record.conn, int(record.fields["sa"]), value)
+            self._log_detection(record, msg.ts_mono)
+        if self.monitor is not None:  # after detect, so a new connection is already open
+            conn, entry = self.detect.connection_for(msg.sa), self.detect.entry_for(msg.sa)
+            for record in self.monitor.on_message(msg, conn, entry):
+                self._log(record, msg.ts_mono)
+
+    def _log_detection(self, record: Record, ts_mono: Optional[float] = None) -> None:
+        self._log(record, ts_mono)
+        if record.type != "connection_start":
+            return
+        self._connections_started += 1
+        if self.eventlog is not None and not self._header_pending:
+            self.eventlog.sync_now()  # DET-16
+        if self.requests is not None and record.conn is not None:
+            name = record.fields.get("name")
+            value = int(name, 16) if isinstance(name, str) else None
+            self.requests.identify(record.conn, int(record.fields["sa"]), value)
+
+    def _detection(self) -> None:
+        """The first-sweep signals and detect's timed checks (DET-2, DET-4, DET-6)."""
+        if self.detect is None:
+            return
+        now = self.clock.mono()
+        if self.detect.waiting:
+            if self.requests is not None and self.requests.first_sweep_done:
+                for record in self.detect.sweep_complete(now):
+                    self._log_detection(record)
+            elif not self._no_sweep_sent and self._no_sweep_possible(now):
+                self._no_sweep_sent = True
+                self.detect.no_sweep()
+        for record in self.detect.poll(now):
+            self._log_detection(record)
+
+    def _no_sweep_possible(self, now: float) -> bool:
+        """No sweep can be sent this session: no bit rate yet, transmit off, or claim lost."""
+        if self._guard_holds or (self.address is not None and self.address.lost):
+            return True
+        if self.transmit is not None and self.transmit.off_reason is not None:
+            return True  # bus-off, error-passive or a breach (NP-3, NP-18)
+        wait_s = float(self._settings["detection.first_sweep_wait_s"])
+        return self._bitrate is None and now - self._open_mono >= wait_s
+
+    def _end_connections(self, reason: str) -> None:
+        """connection_end for every open connection, before session_end (DET-6)."""
+        if self.detect is None:
+            return
+        for record in self.detect.end_all(reason, self.clock.mono()):
+            self._log(record)
 
     def _timers(self) -> None:
         if self.eventlog is None:
@@ -528,7 +580,12 @@ class Session:
         self.eventlog = EventLog(
             self._platform, self.clock, self._part_path(), session, self._prev_hash
         )
-        self.detect = Detect(self.clock, self._settings, self._inventory)
+        self.monitor = Monitor(self.clock, self._settings, self._inventory)
+        self.detect = Detect(
+            self.clock, self._settings, self._inventory, self.monitor.end, self.clock.mono()
+        )
+        self._no_sweep_sent = False
+        self._connections_started = 0
         self.transmit = Transmit(self._platform, self.clock, self._settings, self._logger_name)
         self.address = Address(
             self.clock, self._settings, self._logger_name, self._inventory_addresses
@@ -664,7 +721,7 @@ class Session:
             card_pct: Optional[float] = self.store.usage().used_pct
         except OSError:
             card_pct = None
-        connections = len(self.detect.connections) if self.detect is not None else 0
+        connections = self._connections_started
         tx = (
             self.transmit.logger_tx()
             if self.transmit is not None
@@ -696,6 +753,7 @@ class Session:
             self._claim_sent_mono = None
             self._settle_header()
         self._collect()
+        self._end_connections(CONNECTION_END_REASON.get(reason, "software restart"))
         self._log(self._session_end(reason))
         self.eventlog.sync_now()
         self.eventlog.close()
@@ -706,18 +764,21 @@ class Session:
         self.diag.flush()
         self.eventlog = None
         self.detect = None
+        self.monitor = None
         self.transmit = None
         self.address = None
         self.requests = None
 
     def _roll_over(self) -> None:
         assert self.eventlog is not None
+        self._end_connections("session roll-over")
         self._log(self._session_end("session roll-over"))
         self.eventlog.sync_now()
         self._part += 1
         self.eventlog.roll_over(self._part_path())
         self._part_start_mono = self.clock.mono()
         self._counts = {"high": 0, "notice": 0, "info": 0}  # each part reports its own counts
+        self._connections_started = 0
         self._frames_rx = 0
         self._error_frames = 0
         self._wake = "session roll-over"

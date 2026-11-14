@@ -16,6 +16,8 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 
 **Where the data goes.** Everything is written to the logger's card. A maintenance laptop retrieves the logs over a wired SSH connection, checks the chain and produces a report for review.
 
+**How it decides a device is new.** Each device that claims an address is known by its 64-bit NAME, so a known ECU that moves to another address is still recognized; a device that never claims is known by its address. At the start of a session the logger waits for its first address-claim sweep before deciding about addresses that send without claiming. A connection ends after 60 s of silence from the device while the rest of the bus keeps talking, or at key-off. The connection's end record lists every PGN the device sent, its first 100 requests, the ECUs it addressed, diagnostic activity, extended transfers, control PGNs and proprietary PGNs.
+
 *(The rest of this chapter is written as each build step lands.)*
 
 - What you need *(step 7)*
