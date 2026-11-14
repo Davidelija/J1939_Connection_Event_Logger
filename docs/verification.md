@@ -47,18 +47,18 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | NP-18 | T | 3 | `test_NP_18_*`, `test_NP_18_send_error_turns_transmit_off_with_a_high_fault` | vcan | pass on vcan: send error turns transmit off with a high fault | 2026-11-14 | CI, PR step-3-session |
 | NP-19 | T | 3 | `test_NP_19_restart_loop_starts_listen_only_with_a_high_fault` | vcan | pass on vcan: three unclean starts in 10 minutes start listen-only with a high fault; cleared by a clean end; systemd limits in step 8 | 2026-11-14 | CI, PR step-3-session |
 | TRN-2 | D | 6 / 8 |  |  |  |  |  |
-| TRN-3 | T | 6 |  |  |  |  |  |
+| TRN-3 | T | 6 | `test_TRN_3_training_stops_observing_at_the_timeout` | vcan | partial: observation stops at training.timeout_min; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
 | TRN-4 | D | 7 |  |  |  |  |  |
 | TRN-5 | D | 7 |  |  |  |  |  |
 | TRN-6 | I | 6 |  |  |  |  |  |
 | TRN-7 | I | 6 |  |  |  |  |  |
 | TRN-9 | T | 6 | `test_TRN_9_untrained_session_caps_severity_at_notice` | vcan | partial: severity cap without an inventory; untrained header and light in steps 2 and 7 | 2026-11-13 | CI, PR step-1-logic |
-| TRN-10 | T | 6 |  |  |  |  |  |
-| TRN-11 | T | 6 |  |  |  |  |  |
-| TRN-12 | T | 6 |  |  |  |  |  |
+| TRN-10 | T | 6 | `test_TRN_10_*` | vcan | partial: PGN sent or requested and address approvals, control-PGN warning recorded, other records refused; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
+| TRN-11 | T | 6 | `test_TRN_11_training_and_approvals_never_change_the_inventory_they_read` | vcan | partial: training and approvals only produce new versions; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
+| TRN-12 | T | 6 | `test_TRN_12_*` | vcan | partial: conditions from EEC1, CCVS and PTO1 (or declared PTO), PGNs per ECU in each; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
 | TRN-13 | I | 6 |  |  |  |  |  |
-| TRN-14 | T | 6 |  |  |  |  |  |
-| TRN-15 | T | 6 |  |  |  |  |  |
+| TRN-14 | T | 6 | `test_TRN_14_removing_a_device_retires_its_entry`, `test_TRN_14_the_logger_is_never_part_of_the_inventory` | vcan | partial: removal record and retired IDs; the logger is never an entry; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
+| TRN-15 | T | 6 | `test_TRN_15_removing_one_pgn_sent_or_requested` | vcan | partial: trained or approved PGN removed, sent or requested; inventory built; wired into the session in step 6 PR 3 | 2026-11-14 | CI, PR step-6-inventory |
 | DET-1 | T | 1 | `test_DET_1_*` | vcan | pass (detect): a NAME not in the inventory opens a connection keyed by NAME; baseline ECUs get none | 2026-11-14 | CI, PR step-4-detect |
 | DET-2 | T | 4 | `test_DET_2_*`, `test_DET_2_unclaimed_address_is_detected_when_the_first_sweep_completes`, `test_DET_2_without_a_bit_rate_the_wait_ends_after_first_sweep_wait_s` | vcan | pass on vcan: the first-sweep wait in the session, ended by the sweep or after first_sweep_wait_s without one; X42 fixtures by the test-script writers | 2026-11-14 | CI, PR step-4-session |
 | DET-3 | T | 4 | `test_DET_3_*` | vcan | pass on vcan: replies to an unclaimed address open a connection; 254, 255, the logger and claimed addresses excluded | 2026-11-14 | CI, PR step-4-session |
