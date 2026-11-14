@@ -152,6 +152,25 @@ def test_LOG_9_first_sweep_is_logged_then_only_changes(tmp_path: Path) -> None:
     assert (r.sweeps, r.sweeps_logged) == (3, 2)
 
 
+def test_DET_5_names_appearing_and_disappearing_between_sweeps(tmp_path: Path) -> None:
+    r, fc, _ = make(tmp_path)
+    r.session_start()
+    r.poll()
+    r.on_message(claim(ENGINE, 0), LOGGER_SA)
+    r.on_message(claim(SCAN, 0xF9), LOGGER_SA)
+    fc.advance(1.3)
+    r.poll()
+    r.take_records()
+    fc.advance(600)
+    r.poll()
+    r.on_message(claim(ENGINE, 0), LOGGER_SA)  # the scan tool no longer answers
+    fc.advance(1.3)
+    r.poll()
+    [gone] = r.take_records()
+    assert (gone.type, gone.sev) == ("sweep", "notice")
+    assert gone.fields["missing"] == [f"0x{SCAN:016X}"] and gone.fields["added"] == []
+
+
 def test_NP_9_never_requests_outside_the_request_allow_list(tmp_path: Path) -> None:
     fc = FakeClock()
     p = DesktopPlatform(clock=fc, root=tmp_path)

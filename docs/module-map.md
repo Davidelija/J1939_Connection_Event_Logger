@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, step 4 PR 1 (`monitor`).
+Last updated: 2026-11-14, step 4 PR 2 (`detect`).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -51,7 +51,7 @@ flowchart TB
 | `rawcap.py` | 1 | Saves raw candump files from 10 s before to 60 s after each new connection or control flag, from capture's ring. | 6 | ⬜ |
 | `decode.py` | 2 | Raw frames to J1939 messages: ID split, NAME decode, multi-frame reassembly up to 1785 bytes with timeouts and limits; counts bad input and never crashes on it. Asks for CTS and EOMA for transfers to the logger, and reads bus-off and error-passive from error frames (v2). | 1, 3 | ✅ |
 | `config.py` | 2 | Validates the config (every key, type, allow-lists never widened, move grace at most 5 s, detection-weakening changes flagged) and the inventory and library files; refuses unknown formats. | 2 | ✅ |
-| `detect.py` | 3 | Decides when a device connects, moves or ends. Now: a new NAME opens a connection with a wake-timing category. Full rules come in step 4. | 1, 4 | 🟡 |
+| `detect.py` | 3 | Decides when a device connects, moves or ends: connections keyed by NAME, or by address for a device that never claims; the first-sweep wait; traffic from, and replies to, unclaimed addresses; moves (`address_change`) and conflicts (`address_conflict`); silence and key-off ends with `connection_end` filled from `monitor`; the session's address-to-NAME map. Classification by wake timing until `identify` (step 5). Wired into the session in step 4 PR 3. | 1, 4 | 🟡 |
 | `monitor.py` | 3 | What each connected device sends and requests: the PGN table (first, last, count, bounded), the first requests and a count of the rest, ECUs contacted, DM activity, ETP transfers with the memory-transfer flag, proprietary PGNs; `control_flag` and `known_device_new_pgn` records; `summary(conn)` gives `detect` the `connection_end` fields. Wired into the session in step 4 PR 3; raw capture trigger in step 6. | 4 | 🟡 |
 | `identify.py` | 3 | What kind of device it is: category, type, make, model and confidence from NAME, identity replies and the device library. | 5 | ⬜ |
 | `address.py` | 3 | The logger's own address claim: from 247 down, skipping known, claimed and reserved addresses; always concedes; one more try, then Cannot Claim; answers Request for Address Claim, NACKs other requests to the logger, ignores Commanded Address. | 3 | ✅ |
