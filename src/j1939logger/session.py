@@ -41,6 +41,7 @@ cause, or power loss with ``bytes_cut_off``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -51,10 +52,21 @@ from pathlib import Path
 from typing import Any, Optional
 
 from j1939logger.address import Address
-from j1939logger.admin import DiagLog
+from j1939logger.admin import RESTART_EXIT, DiagLog, reset_record
 from j1939logger.capture import Capture
 from j1939logger.clock import Clock
-from j1939logger.config import Inventory, Library, LibraryError, validate_library
+from j1939logger.config import (
+    Config,
+    ConfigError,
+    Inventory,
+    Library,
+    LibraryError,
+    change_record,
+    rejected_record,
+    validate,
+    validate_inventory,
+    validate_library,
+)
 from j1939logger.decode import bus_state, decode, new_state
 from j1939logger.detect import Detect
 from j1939logger.eventlog import ZERO_HASH, EventLog, format_utc, scan_tail
@@ -80,6 +92,7 @@ from j1939logger.platform.interface import Platform
 from j1939logger.rawcap import RawCap
 from j1939logger.requests import PGN_VIN, RequestOutcome, Requests
 from j1939logger.retention import RawFile, Retention
+from j1939logger.status import State, Status
 from j1939logger.store import Store
 from j1939logger.transmit import Transmit
 from j1939logger.types import Connection, Frame, J1939Msg, Name, PlatformError, Record, TxRequest
@@ -148,6 +161,32 @@ CONNECTION_END_REASON = {
     "key-off, bus silent": "key-off",
     "service stopped": "software restart",
 }
+
+
+def _refused(error: str, next_step: str) -> dict[str, Any]:
+    return {"proto": 1, "ok": False, "error": error, "next": next_step}
+
+
+def card_files(card: Path) -> list[dict[str, Any]]:
+    """Session files, raw captures and diagnostic files on the card, with size and SHA-256.
+
+    ``j1939cmd`` answers ``retrieve_list`` with this even when the service is down (DC-21).
+    """
+    out = []
+    for sub in ("sessions", "raw", "diag"):
+        folder = card / sub
+        if not folder.is_dir():
+            continue
+        for p in sorted(folder.iterdir()):
+            if not p.is_file():
+                continue
+            try:
+                data = p.read_bytes()
+            except OSError:
+                continue
+            out.append({"path": f"{sub}/{p.name}", "size": len(data),
+                        "sha256": hashlib.sha256(data).hexdigest()})  # fmt: skip
+    return out
 
 
 def _version_number(version: str) -> Optional[int]:
@@ -221,6 +260,14 @@ class Session:
         self._proposal: Optional[dict[str, Any]] = None
         self._dropped = False  # inventory dropped for the session (VIN mismatch, training)
         self._vin_received: Optional[str] = None
+        self.status = Status(platform, settings)
+        self._unreviewed: list[str] = []  # high events not yet cleared (STS-2, DC-21)
+        self._retrieved: list[str] = []  # files the laptop has retrieved (LOG-11)
+        self._inventory_active = True  # False after retrain until a training is confirmed
+        self._high_fault: Optional[str] = None
+        self._vin_status: Optional[str] = None
+        self._status_mono = float("-inf")
+        self.exit_code = 0
         self._end_sets: dict[int, frozenset[int]] = {}
         baseline = inventory.entries if inventory is not None else ()
         self._known_addresses = {
@@ -299,12 +346,32 @@ class Session:
             self.diag.log("error", "session", f"{exc.kind}: {exc}")
         finally:
             self.capture.stop()
-            if self.eventlog is not None:
+            if self.eventlog is not None and self.exit_code == RESTART_EXIT and error is None:
+                self._leave_for_restart()
+            elif self.eventlog is not None:
                 self._close_session(
                     "service stopped" if error is None else f"stopped: {error.kind}"
                 )
             self.diag.flush()
         return error
+
+    def _leave_for_restart(self) -> None:
+        """Operator restart (STS-11): connections end with "software restart" and the file is
+        left without session_end, so the next session records a software restart (LOG-18)."""
+        assert self.eventlog is not None
+        if self._header_pending:
+            self._claim_sent_mono = None
+            self._settle_header()
+        self._collect()
+        self._end_connections("software restart")
+        if self.rawcap is not None:
+            self.rawcap.close()
+        self.eventlog.sync_now()
+        self.eventlog.close()
+        self._prev_hash = self.eventlog.last_hash
+        self._write_state(self._session)
+        self.diag.restart_cause("software restart")  # the last diagnostic entry
+        self.eventlog = None
 
     @property
     def open(self) -> bool:
@@ -330,6 +397,7 @@ class Session:
             self._collect()
             self._detection()
             self._raw_poll()
+            self._update_status()
         self._timers()
         self._drain_faults()
         return len(frames)
@@ -420,6 +488,7 @@ class Session:
             status = "unavailable"  # nothing to compare with (untrained)
         else:
             status = "match" if vin == self._inventory_vin else "mismatch"
+        self._vin_status = status
         return Record(
             "vin_check",
             "info",
@@ -507,6 +576,366 @@ class Session:
         """Untrained (TRN-9): no inventory, or dropped for this session (DET-14, training)."""
         return self._inventory is None or self._dropped
 
+    # -- new versions from the card (DC-20, DC-21) ------------------------------------
+
+    def _set_inventory(self, inv: Optional[Inventory]) -> None:
+        self._inventory = inv
+        entries = inv.entries if inv is not None else ()
+        self._inventory_addresses = tuple(a for e in entries for a in e.addresses)
+        self._inventory_vin = inv.vin if inv is not None else None
+        self._known_addresses = {
+            a for e in entries if e.name is not None and e.category != APPROVED for a in e.addresses
+        }
+        self._versions["inventory"] = inv.version if inv is not None else None
+
+    def _newest(self, kind: str) -> Optional[dict[str, Any]]:
+        versions = self.store.versions(kind)
+        if not versions:
+            return None
+        data = self.store.load(kind, versions[-1])
+        try:
+            doc = json.loads(data.decode("utf-8")) if data is not None else None
+        except (ValueError, UnicodeDecodeError):
+            return None
+        return doc if isinstance(doc, dict) else None
+
+    def _reload_from_card(self) -> None:
+        """At session open: the newest saved inventory and config apply (or none after retrain)."""
+        if not self._inventory_active:
+            self._set_inventory(None)
+        else:
+            doc = self._newest("inventory")
+            if doc is not None:
+                inv = validate_inventory(doc)
+                current = _version_number(self._inventory.version) if self._inventory else None
+                new = _version_number(str(doc.get("inventory")))
+                if isinstance(inv, Inventory) and (current is None or (new or 0) >= current):
+                    self._set_inventory(inv)
+        cfg_doc = self._newest("config")
+        if cfg_doc is not None:
+            cfg = validate(cfg_doc)
+            if isinstance(cfg, Config) and cfg.version != self._versions.get("config"):
+                self._settings = settings_from_config(cfg_doc)
+                self._versions["config"] = cfg.version
+
+    # -- status file and light (STS-1 to STS-3, DC-21) --------------------------------
+
+    def _state_name(self) -> str:
+        if self.eventlog is None or self._header_pending:
+            return "starting"
+        if self._bitrate is None:
+            return "detecting bit rate"
+        if self.training is not None:
+            return "training"
+        if self._untrained:
+            return "needs training"
+        if self._high_fault is not None:
+            return "fault"
+        return "recording"
+
+    def status_state(self) -> State:
+        try:
+            usage = self.store.usage()
+            pct: Optional[float] = usage.used_pct
+        except OSError:
+            pct = None
+        reading = self.clock.now()
+        transmit = "on"
+        if self.transmit is not None and self.transmit.off_reason is not None:
+            transmit = f"off: {self.transmit.off_reason}"
+        elif self._guard_holds:
+            transmit = "off: restart loop"
+        retrieved = sorted({Path(f).name.split("_", 1)[0] for f in self._retrieved
+                            if f.startswith("sessions/")})  # fmt: skip
+        warn = float(self._settings.get("storage.warn_pct", 90))
+        return State(
+            state=self._state_name(),
+            session=self._session or None,
+            bitrate=self._bitrate,
+            logger_sa=self.logger_sa,
+            unreviewed_high=len(self._unreviewed),
+            fault=self._high_fault,
+            card_used_pct=pct,
+            card_nearly_full=pct is not None and pct >= warn,
+            clock_valid=reading.valid,
+            clock_source=reading.source,
+            untrained=self._untrained,
+            retrieved=retrieved,
+            training_coverage=self.training.coverage() if self.training is not None else None,
+            config=self._versions.get("config"),
+            inventory=self._versions.get("inventory"),
+            library=self._versions.get("library"),
+            transmit=transmit,
+            vin_status=self._vin_status,
+            restart_loop=self._guard_holds,
+        )
+
+    def _update_status(self, force: bool = False) -> None:
+        now = self.clock.mono()
+        if not force and now - self._status_mono < 0.5:
+            return
+        self._status_mono = now
+        before = self.status.pattern
+        data = self.status.update(self.status_state(), now, self._now_text())
+        if self.status.pattern != before:
+            self.diag.log("info", "status", f"light {self.status.pattern}")  # STS-1
+        if data is not None:
+            self.store.write_atomic("status", "status", data)
+
+    # -- commands (STS-23, DC-21; cmdserver calls handle) ------------------------------
+
+    CHANGING = frozenset(
+        {
+            "login",
+            "logout",
+            "train_start",
+            "train_finish",
+            "train_confirm",
+            "approve",
+            "remove",
+            "clear",
+            "config_push",
+            "retrieved",
+            "restart",
+            "retrain",
+        }
+    )
+
+    def handle(
+        self,
+        cmd: str,
+        args: Optional[Mapping[str, Any]] = None,
+        operator: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Run one laptop command in the main loop; the protocol reply (``proto`` 1)."""
+        args = dict(args or {})
+        if cmd in self.CHANGING and not operator:
+            return _refused("unknown operator key", "install the key with release/keys.sh")
+        if self.eventlog is None and cmd not in ("status", "events", "inventory_show",
+                                                 "config_show", "retrieve_list"):  # fmt: skip
+            return _refused("no session is open", "wait for CAN activity, then retry")
+        handler = getattr(self, f"_cmd_{cmd}", None)
+        if handler is None:
+            return _refused(f"unknown command {cmd!r}", "run j1939ctl --help")
+        try:
+            result = handler(args, operator, reason)
+        except InventoryRefused as exc:
+            return _refused(str(exc), "check the ID with events or inventory show")
+        except (ValueError, KeyError, TypeError) as exc:
+            return _refused(f"bad arguments: {exc}", f"run j1939ctl {cmd} --help")
+        self._update_status(force=True)
+        return {"proto": 1, "ok": True, "result": result}
+
+    def _need_reason(self, reason: Optional[str]) -> str:
+        if not reason:
+            raise InventoryRefused("a reason is required")
+        return reason
+
+    def _cmd_status(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        from j1939logger.status import contents
+
+        body = contents(self.status_state(), self._now_text())
+        body["vin"] = self._vin_received or self._inventory_vin
+        body["unreviewed"] = list(self._unreviewed)
+        return body
+
+    def _cmd_login(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        fields = {"operator": operator, "connection": args.get("connection", "ssh"),
+                  "tool_version": args.get("tool_version")}  # fmt: skip
+        self._log(Record("operator_login", "notice", None, None, fields))
+        return {"operator": operator}
+
+    def _cmd_logout(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        fields = {"operator": operator, "connection": args.get("connection", "ssh"),
+                  "tool_version": args.get("tool_version")}  # fmt: skip
+        self._log(Record("operator_logout", "info", None, None, fields))
+        return {"operator": operator}
+
+    def _cmd_train_start(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        if self.training is not None:
+            raise InventoryRefused("training is already running")
+        self.train_start(str(operator))
+        return {"timeout_min": self._settings["training.timeout_min"]}
+
+    def _cmd_train_status(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        t = self.training
+        if t is None:
+            raise InventoryRefused("training is not running")
+        elapsed = self.clock.mono() - t.start_mono
+        total = float(self._settings["training.timeout_min"]) * 60.0
+        return {"elapsed_s": round(elapsed), "remaining_s": max(0, round(total - elapsed)),
+                "timed_out": t.timed_out, "coverage": t.coverage()}  # fmt: skip
+
+    def _cmd_train_finish(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        return self.train_finish(str(operator), bool(args.get("pto_declared", False)))
+
+    def _cmd_train_confirm(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        version = self.confirm_inventory(str(operator), bool(args["apply"]), reason)
+        if version is not None:
+            self._inventory_active = True  # a confirmed training ends a retrain
+            self._save_state()
+        return {"inventory": version}
+
+    def _event_rows(self, include_all: bool) -> list[dict[str, Any]]:
+        rows = []
+        wanted = set(self._unreviewed)
+        for f in session_files(self._sessions_dir):
+            for line in f.path.read_text(encoding="utf-8").splitlines():
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                eid = f"{f.session}-{r.get('rec')}"
+                if r.get("type") in ("session_start", "session_end"):
+                    continue
+                if include_all or eid in wanted:
+                    rows.append({"event": eid, "type": r.get("type"), "sev": r.get("sev"),
+                                 "utc": r.get("utc"), "sa": r.get("sa"), "name": r.get("name"),
+                                 "category": r.get("category"),
+                                 "reviewed": eid not in wanted})  # fmt: skip
+        return rows
+
+    def _cmd_events(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        return {"events": self._event_rows(bool(args.get("all", False)))}
+
+    def _cmd_approve(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        event = str(args["event"])
+        version = self.approve(event, str(operator), self._need_reason(reason),
+                               bool(args.get("warning_shown", False)))  # fmt: skip
+        if event in self._unreviewed:  # the approval clears its event (LAP-11)
+            self._unreviewed.remove(event)
+            self._save_state()
+        return {"inventory": version, "cleared": [event]}
+
+    def _cmd_remove(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        pgn = args.get("pgn")
+        version = self.remove(str(args["entry"]), str(operator), self._need_reason(reason),
+                              int(pgn) if pgn is not None else None, args.get("direction"),
+                              bool(args.get("warning_shown", False)))  # fmt: skip
+        return {"inventory": version}
+
+    def _cmd_clear(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        events = [str(e) for e in args["events"]]
+        why = self._need_reason(reason)
+        not_open = [e for e in events if e not in self._unreviewed]
+        if not events or not_open:
+            raise InventoryRefused(
+                f"not unreviewed high events: {', '.join(not_open) or 'none given'}"
+            )
+        for e in events:
+            self._unreviewed.remove(e)
+        self._save_state()
+        from j1939logger.status import light
+
+        after = light(self.status_state())
+        self._log(Record("review_clear", "notice", None, None, {
+            "operator": operator, "cleared": events, "disposition": args.get("disposition"),
+            "reason": why, "approve_device": False, "light": after,
+        }))  # fmt: skip
+        return {"cleared": events, "light": after}
+
+    def _cmd_config_show(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        return {"config": self._newest("config")}
+
+    def _cmd_config_push(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        new_doc = args["config"]
+        old_doc = self._newest("config")
+        old = validate(old_doc) if old_doc is not None else None
+        if not isinstance(old, Config):
+            raise InventoryRefused("the active config is not on the card")
+        checked = validate(new_doc, old)
+        proposed = new_doc.get("config") if isinstance(new_doc, Mapping) else None
+        if isinstance(checked, ConfigError):
+            self._log(rejected_record(checked, proposed, str(operator), None))
+            raise InventoryRefused(f"config rejected: {checked}")
+        if checked.version in [f"cfg-v{v}" for v in self.store.versions("config")]:
+            raise InventoryRefused(f"{checked.version} already exists; raise the version")
+        if checked.weakens and not args.get("confirm"):
+            raise InventoryRefused(
+                f"weakens detection ({', '.join(checked.weakens)}): add --confirm"
+            )
+        data = (json.dumps(new_doc, indent=2) + "\n").encode("utf-8")
+        if not self.store.write_atomic("config", checked.version, data):
+            raise InventoryRefused("the new config could not be saved")
+        self._log(change_record(checked, old, str(operator), None))
+        return {"config": checked.version, "changed": list(checked.changed),
+                "weakens": list(checked.weakens)}  # fmt: skip
+
+    def _cmd_inventory_show(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        return {"inventory": self._inventory_doc()}
+
+    def _cmd_retrieve_list(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        return {"files": card_files(self._platform.paths().card)}
+
+    def _cmd_retrieved(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        files = [str(f) for f in args.get("files", [])]
+        for f in files:
+            if f not in self._retrieved:
+                self._retrieved.append(f)
+        self._save_state()
+        sessions = sorted({int(Path(f).name[1:7]) for f in files
+                           if f.startswith("sessions/")
+                           and Path(f).name[1:7].isdigit()})  # fmt: skip
+        raw = [f for f in files if f.startswith("raw/")]
+        partial = [self._session] if self._session in sessions else []
+        self._log(Record("retrieval", "info", None, None, {
+            "operator": operator, "sessions": sessions, "partial": partial, "raw_files": len(raw),
+            "chain_verified": bool(args.get("chain")), "last_hash": args.get("last_hash"),
+        }))  # fmt: skip
+        return {"retrieved": len(files)}
+
+    def _cmd_restart(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        self._log(reset_record("restart", str(operator), self._need_reason(reason)))
+        self._unclean_starts = []  # an operator restart clears the restart guard (NP-19)
+        self._save_state()
+        self.exit_code = RESTART_EXIT
+        self.stop()
+        return {"exit_code": RESTART_EXIT}
+
+    def _cmd_retrain(
+        self, args: dict[str, Any], operator: Optional[str], reason: Optional[str]
+    ) -> Any:
+        archived = self._versions.get("inventory")
+        self._log(reset_record("retrain", str(operator), self._need_reason(reason), archived))
+        self._inventory_active = False  # untrained from the next session (STS-12)
+        self._save_state()
+        return {"archived": archived}
+
     # -- raw captures and retention (step 6, DC-20) ---------------------------------
 
     def _raw_start(self, conn: int, ts_mono: float) -> Optional[str]:
@@ -530,7 +959,8 @@ class Session:
                 st = p.stat()
             except OSError:
                 continue
-            out.append(RawFile(p, st.st_mtime, st.st_size, retrieved=False))  # step 7: retrieved
+            done = f"raw/{p.name}" in self._retrieved  # retrieved first (LOG-11)
+            out.append(RawFile(p, st.st_mtime, st.st_size, retrieved=done))
         return out
 
     def _retention(self) -> None:
@@ -933,8 +1363,14 @@ class Session:
         if self._header_pending and record.type != "session_start":
             self._buffer.append((record, ts_mono))
             return
-        if self.eventlog.append(record) is not None:
+        event_id = self.eventlog.append(record)
+        if event_id is not None:
             self._counts[record.sev] = self._counts.get(record.sev, 0) + 1
+            if record.sev == "high":
+                self._unreviewed.append(event_id)  # until cleared (STS-2)
+                if record.type == "fault":
+                    self._high_fault = str(record.fields.get("cause"))
+                self._save_state()
 
     def _drain_faults(self) -> None:
         faults = self.store.take_faults()
@@ -977,8 +1413,15 @@ class Session:
             "session": session,
             "last_hash": self.eventlog.last_hash,
             "unclean_starts": self._unclean_starts,
+            "unreviewed": self._unreviewed,
+            "retrieved": self._retrieved,
+            "inventory_active": self._inventory_active,
         }
         self.store.write_atomic("state", "state", json.dumps(state).encode("utf-8"))
+
+    def _save_state(self) -> None:
+        if self.eventlog is not None:
+            self._write_state(self._session)
 
     def _restart_guard(self, unclean: bool) -> bool:
         """Record an unclean start and say whether the restart guard holds (NP-19)."""
@@ -1013,6 +1456,10 @@ class Session:
             state, corrupt = self._read_state()
             starts = state.get("unclean_starts") if state else None
             self._unclean_starts = list(starts) if isinstance(starts, list) else []
+            if state:
+                self._unreviewed = [str(x) for x in state.get("unreviewed", []) or []]
+                self._retrieved = [str(x) for x in state.get("retrieved", []) or []]
+                self._inventory_active = state.get("inventory_active", True) is not False
             newest = files[-1] if files else None
             card_last = newest.session if newest else 0
             state_last = state["session"] if state else 0
@@ -1059,6 +1506,7 @@ class Session:
         self.eventlog = EventLog(
             self._platform, self.clock, self._part_path(), session, self._prev_hash
         )
+        self._reload_from_card()
         self.monitor = Monitor(self.clock, self._settings, self._inventory)
         self.detect = Detect(
             self.clock,
@@ -1070,6 +1518,8 @@ class Session:
         )
         self._idents = {}
         self._end_sets = {}
+        self._high_fault = None
+        self._vin_status = None
         self._dropped = False
         self._vin_received = None
         self.rawcap = RawCap(self._platform, self._settings, session)

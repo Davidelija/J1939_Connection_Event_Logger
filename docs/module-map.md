@@ -2,7 +2,7 @@
 
 What each module and script is for, where it lives, which build step brings it, and how far it has got. Contracts are in `docs/modules.md`, which wins on any boundary question; this page is the plain-language overview. **Update it in every pull request that adds or changes a module or script.**
 
-Last updated: 2026-11-14, after build step 6 (PRs #21 to #24).
+Last updated: 2026-11-14, step 7 PR 1 (`status`, `admin`, command handlers).
 
 **Status:** ✅ built · 🟡 minimal or partial (finished in a later step) · ⬜ planned
 
@@ -16,11 +16,11 @@ flowchart TB
     main["main 🟡"]; j1939cmd["j1939cmd ⬜"]
   end
   subgraph L4["4 · Orchestration"]
-    session["session 🟡"]; admin["admin 🟡"]
+    session["session 🟡"]; admin["admin ✅"]
   end
   subgraph L3["3 · Logic"]
     detect["detect ✅"]; monitor["monitor ✅"]; identify["identify ✅"]; address["address ✅"]
-    requests["requests ✅"]; inventory["inventory ✅"]; retention["retention ✅"]; status["status ⬜"]
+    requests["requests ✅"]; inventory["inventory ✅"]; retention["retention ✅"]; status["status ✅"]
   end
   subgraph L2["2 · Pure"]
     decode["decode ✅"]; config["config ✅"]
@@ -58,9 +58,9 @@ flowchart TB
 | `requests.py` | 3 | The logger's requests: the address-claim sweep at start and every 10 min (sweep records for the first and for changes), Time/Date and VIN to the VIN address, identity requests to devices without a known NAME; 1.25 s timeout and one retry; outcomes for `identify`; failed requests not repeated. | 3 | ✅ |
 | `inventory.py` | 3 | The known-good devices for this truck: training (every NAME and unclaimed address, the conditions from engine speed, vehicle speed and PTO, identity replies, timeout), the proposed inventory, next versions and entry IDs that are never reused, approvals from logged events (device, PGN sent or requested, address) and removals, with their records. | 6 | ✅ |
 | `retention.py` | 3 | Keeps the card from filling: lists raw captures to free (retrieved first, then unretrieved, oldest first; never session or diagnostic files), a notice at the warning level and a high fault when only the reserve is left. | 6 | ✅ |
-| `status.py` | 3 | The status file and the one status light (fast blink beats slow blink beats steady). | 7 | ⬜ |
-| `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks; listen-only until the bit rate is confirmed, then normal mode, the address claim and the request schedule; transmit off on bus-off or error-passive; the restart guard; the VIN check; drives `detect` and `monitor` (the first-sweep signals, timed checks, `connection_end` before `session_end`); loads the device library and runs `identify` (identification, final identification, reclassification); training and the operator calls (train, confirm or reject, approve, remove), the VIN-mismatch switch, raw captures and retention. Status file and commands come in step 7. | 1–3, 7 | 🟡 |
-| `admin.py` | 4 | The diagnostic log (built: one line per event, repeats counted, rotated, restart causes for the next session) and, in step 7, restart and retrain. | 2, 7 | 🟡 |
+| `status.py` | 3 | The status file (`status-1`, written on the card at each state change) and the one status light: off while starting, fast blink for a fault, VIN mismatch, transmit off or a restart loop, slow blink for unreviewed events, training or a nearly full card, otherwise steady. | 7 | ✅ |
+| `session.py` | 4 | The session lifecycle and main loop: header and end records, session numbering and `state.json`, how the last session ended, key-off after 30 s and a new session on the next frame, 24 h roll-over into parts, watchdog kicks; listen-only until the bit rate is confirmed, then normal mode, the address claim and the request schedule; transmit off on bus-off or error-passive; the restart guard; the VIN check; drives `detect` and `monitor` (the first-sweep signals, timed checks, `connection_end` before `session_end`); loads the device library and runs `identify` (identification, final identification, reclassification); training and the operator calls (train, confirm or reject, approve, remove), the VIN-mismatch switch, raw captures and retention; the laptop command handlers (`handle`), unreviewed events in `state.json`, the status file and light, new inventory and config versions from the next session. Status file and commands come in step 7. | 1–3, 7 | 🟡 |
+| `admin.py` | 4 | The diagnostic log (one line per event, repeats counted, rotated, restart causes) and the `reset` record for `restart` (exit code 75; the next session records a software restart) and `retrain` (the inventory archived, untrained from the next session). | 2, 7 | ✅ |
 | `main.py` | 5 | Service entry point. Now: reads and validates the config and inventory files and runs a session on the desktop platform. Later: the command socket (`cmdserver`). | 1, 7 | 🟡 |
 | `j1939cmd.py` | 5 | The logger-side program each laptop command runs over SSH; passes the request to the service over a Unix socket. | 7 | ⬜ |
 
