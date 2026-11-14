@@ -18,3 +18,15 @@ def test_SC_6_inventory_public_names() -> None:
         inventory.__all__
     )
     assert {"observe", "identity", "observing", "coverage", "propose"} <= _public(Training)
+
+
+def test_SC_6_rawcap_and_retention_public_names() -> None:
+    import j1939logger.rawcap as rawcap
+    import j1939logger.retention as retention
+    from j1939logger.rawcap import RawCap
+    from j1939logger.retention import Retention
+
+    assert {"RawCap", "candump_line"} <= set(rawcap.__all__)
+    assert {"start", "feed", "poll", "close", "stop", "take_faults"} <= _public(RawCap)
+    assert {"Retention", "RawFile", "Plan"} <= set(retention.__all__)
+    assert "check" in _public(Retention)
