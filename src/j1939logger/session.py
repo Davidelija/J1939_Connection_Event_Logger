@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import queue
 import re
 import threading
 from collections.abc import Iterable, Mapping
@@ -268,6 +269,8 @@ class Session:
         self._vin_status: Optional[str] = None
         self._status_mono = float("-inf")
         self.exit_code = 0
+        # Laptop commands from cmdserver, handled one at a time in the main loop (STS-23).
+        self.commands: queue.SimpleQueue[Any] = queue.SimpleQueue()
         self._end_sets: dict[int, frozenset[int]] = {}
         baseline = inventory.entries if inventory is not None else ()
         self._known_addresses = {
@@ -398,6 +401,7 @@ class Session:
             self._detection()
             self._raw_poll()
             self._update_status()
+        self._run_commands()
         self._timers()
         self._drain_faults()
         return len(frames)
@@ -726,6 +730,23 @@ class Session:
             return _refused(f"bad arguments: {exc}", f"run j1939ctl {cmd} --help")
         self._update_status(force=True)
         return {"proto": 1, "ok": True, "result": result}
+
+    def _run_commands(self) -> None:
+        """Answer the commands cmdserver queued, in order (STS-23 (c))."""
+        while True:
+            try:
+                pending = self.commands.get_nowait()
+            except queue.Empty:
+                return
+            req = pending.request
+            try:
+                pending.reply = self.handle(
+                    str(req.get("cmd")), req.get("args"), req.get("operator"), req.get("reason")
+                )
+            except Exception as exc:  # a command never stops the logger (rule 14)
+                self.diag.log("error", "cmdserver", f"{type(exc).__name__}: {exc}")
+                pending.reply = _refused("internal error", "check the diagnostic log")
+            pending.done.set()
 
     def _need_reason(self, reason: Optional[str]) -> str:
         if not reason:

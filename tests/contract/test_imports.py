@@ -14,7 +14,7 @@ PKG = Path(__file__).resolve().parents[2] / "src" / "j1939logger"
 
 # docs/modules.md section 2, plus the shared types.
 LAYERED = {
-    "main", "j1939cmd",
+    "main", "j1939cmd", "cmdserver",
     "session", "admin",
     "detect", "monitor", "identify", "address", "requests", "inventory", "retention", "status",
     "decode", "config",
