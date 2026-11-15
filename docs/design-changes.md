@@ -33,7 +33,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-25 — Add the transmit decisions in `session`, and `capture`, to the safety-critical paths  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `dc-codeowners` (found after QC items 6 and 11: the NP-18 guard moved into the `session` package)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted as proposed in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted as proposed in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** `docs/modules.md` §2 names the safety-critical paths that need a review by Vaughan Lynn or Elijah Umaru on every change: `transmit`, allow-list validation in `config`, hashing in `eventlog`, and `platform`. Proposed: add
   - `session/can.py`: the bit-rate switch to normal mode (NP-1, NP-2, NP-17), turning transmit on, the NP-18 guard `_tx_call` and `_transmit_off`;
   - `session/core.py`: listen-only at session start, the NP-3 bus-state path, the NP-19 restart guard and building `Transmit`;
@@ -50,7 +50,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-23 — The rate limits are config parameters that can lower the release cap but never raise it  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `docs-qc-2` (QC report, after the QC-1 fixes in PR #30)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** Wording only; the code already does this (QC-1, PR #30). NP-16's last sentence, "Both limits are config parameters.", becomes "Both limits are config parameters that may lower, but never raise, the release values of 10 frames per second and one outstanding request per destination; a config that asks for more, zero or a negative value is refused." The `transmit` contract's rate-cap rule (`docs/modules.md`) names the release values (`RELEASE_MAX_FPS` 10, `RELEASE_MAX_OUTSTANDING` 1 in `transmit.py`), says `config.validate` refuses a higher, zero or negative value and that `Transmit` clamps to the release value. The config table in `docs/requirements.md` notes "maximum; can only be lowered" against `transmit.max_frames_per_s` and `transmit.max_outstanding_per_dest`.
 - **Why:** The requirement and the contract still read as if a config could set any rate, which disagrees with CLAUDE.md rule 4 ("never raise the rate cap") and with the code since QC-1. The specs should say what the code does.
 - **Affects:** NP-16 (text only); `transmit` and `config` contracts (wording; no change to inputs, outputs, errors or keys, so no version change); config keys `transmit.max_frames_per_s` and `transmit.max_outstanding_per_dest` (description only).
@@ -59,7 +59,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-24 — The in-process session tests count as level 2 until `tests/component/` exists  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `docs-qc-2` (QC report: the component and replay test levels are empty)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review); the first option was chosen
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session)); the first option was chosen
 - **Change:** Until the test-script writers add `tests/component/` and `tests/replay/` (`docs/test-plan.md` §2, DC-4), the session tests in `tests/unit/test_session_*.py` are recorded as the level 2 (component) evidence. They already run as the test plan defines level 2: `session` in-process with `DesktopPlatform(fault_plan)` and `FakeClock`. `docs/test-plan.md` §2 gets a note saying so, and each COM case in §5 names the session tests that cover it today, or "not covered" where none does. Level 3 (replay, `canplayer` on `vcan0` with `ecu_sim` and the witness) is **not** claimed as covered: the two vcan tests (`test_NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap`, `test_SC_2_...`) are listed as partial. The developer does not write in `tests/component/` or `tests/replay/` (DC-4); those stay with the test-script writers, and this note is removed when they land.
 - **Alternative (not chosen):** leave levels 2 and 3 empty and mark every COM case "waiting for the test-script writers".
 - **Why:** The test plan names four levels; levels 2 and 3 have no folders yet, so the QC report reads them as missing. Much of level 2 is in fact exercised, but under `tests/unit/`, which the plan does not say.
@@ -69,7 +69,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-22 — The troubleshooting table is generated from docs/errors.md, with an Operator column  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `docs-troubleshooting` (CLAUDE.md rule 11)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (generator, markers and CI check accepted, and the Operator column chosen, in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (generator, markers and CI check accepted, and the Operator column chosen, in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** `docs/errors.md` gains a last column, **Operator**: what the operator should do, in plain words, one line per row. `tools/troubleshooting.py` reads the table and writes the user manual's troubleshooting table (light, what happened, what the logger does, what to do) between `<!-- troubleshooting:start -->` and `<!-- troubleshooting:end -->`; `--check` fails when the manual is out of date, and CI runs it. Parsers of `docs/errors.md` accept the extra column (`tools/check_verification.py`, the Kind contract test).
 - **Why:** CLAUDE.md rule 11 says the troubleshooting table is generated from `docs/errors.md`; the table had no column for the operator's next step.
 - **Affects:** `docs/errors.md` (Operator column), `docs/user-manual.md` (section 6), `tools/troubleshooting.py`, `tools/check_verification.py`, CI. No record or format change.
@@ -78,7 +78,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-21 — Step 7 freeze: protocol commands, operator identity, login records, retrieval, status file and light, unreviewed events, config push, restart and retrain, the laptop package, the report  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 7 freeze, branch `step-7-freeze`
-- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** how step 7 fills what the specs left open:
   1. **Protocol commands (STS-23).** `cmdserver` accepts these `cmd` values, one at a time, run by the main loop: `status`, `login`, `logout`, `train_start`, `train_status`, `train_finish`, `train_confirm` (`apply`), `events` (`all`), `approve` (`event`, `warning_shown`), `remove` (`entry`, `pgn`, `direction`, `warning_shown`), `clear` (`events`, `disposition`), `config_show`, `config_push` (`config`, `confirm`), `inventory_show`, `retrieve_list`, `retrieved` (`files`, `chain`, `last_hash`), `restart` and `retrain`. Each reply is the contract's `{"proto":1,"ok":...}` shape; a refusal carries `error` and `next` (LAP-15). The laptop-only commands (`inventory export`, `report`) never reach the logger. The socket is `/run/j1939-logger/cmd.sock` on the Beacon, and `main --socket PATH` elsewhere.
   2. **Operator identity (STS-5).** `j1939cmd` reads the key fingerprint from the file named by `SSH_USER_AUTH` (OpenSSH `ExposeAuthInfo`) and maps it to a name with the fingerprint-to-name file (`/etc/j1939-logger/operators`, kept by `release/keys.sh` in step 8; `--operators PATH` in tests). An unknown fingerprint, or none, is refused for every changing command.
@@ -97,7 +97,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-20 — Step 6 freeze: operator calls, training, conditions, inventory versions, approvals, removals, VIN mismatch, raw captures, retention  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 6 freeze, branch `step-6-freeze`
-- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** how step 6 fills what the specs left open:
   1. **Operator calls before step 7.** `session` gets in-process methods that step 7's `cmdserver` will call: `train_start(operator)`, `train_finish(operator, pto_declared=False)` (returns the proposed inventory), `confirm_inventory(operator, apply)` (approval kind "inventory", or a rejection), `approve(event_id, operator, reason, warning_shown=False)` and `remove(entry_id, operator, reason, pgn=None, direction=None, warning_shown=False)`. Each returns a result the laptop can show (step 7). The confirmation prompts and their warning lines are the laptop's (step 7); the logger records whether a warning was shown.
   2. **Training mode (TRN-2, TRN-3, TRN-9).** Between `train_start` and `train_finish`, or until `training.timeout_min`, `inventory` observes every NAME (and every address that sends without claiming): addresses, PGNs sent, conditions seen and the identity replies (identity requests go to every device during training, NP-13). Detection keeps running as in untrained mode. At the timeout, observation stops and the proposal waits for `train_finish`, whose record carries `timed_out: true`. The proposal is held in memory; a restart before confirmation loses it.
@@ -116,7 +116,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-19 — A corrupt device library is a high fault; identification continues without it  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 5 PR 2 (session wiring), branch `step-5-session`
-- **Decided by:** Vaughan Lynn, 2026-11-14 ("high fault, identify without it", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("high fault, identify without it", chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** `session` loads the newest device library on the card (`library/lib-vN.json`, through `store`) at power-on and records its version in `session_start` (IDN-5). A missing library means no library matches. A library that fails `lib-1` validation gives a high `fault` "device library corrupt (reasons)" with logger action "identifying without it" in the first session; the logger keeps recording and identifies from NAME and self-reported replies only. `docs/errors.md` adds the case to the corrupt-file row.
 - **Why:** `docs/errors.md` covered a corrupt inventory or config, not the library. Detection does not depend on the library, so the logger keeps recording, and the fault is high so the operator sees it, as for a corrupt inventory.
 - **Affects:** IDN-5; `session` (library loading, contract text); `docs/errors.md` (Storage, corrupt file row). No record change; format stays `log-1`.
@@ -125,7 +125,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-18 — Trailer devices are classified by the rule "NAME"  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 5 PR 1 (`identify`), branch `step-5-identify`
-- **Decided by:** Vaughan Lynn, 2026-11-14 ("NAME", amend the note, chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("NAME", amend the note, chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** the requirements' Classification rule enumeration said "NAME is used in analysis only", but DET-18 classifies a trailer device from its NAME and DC-17 records that as rule "NAME". The note now reads: the logger writes NAME only for the trailer rule (DET-18); otherwise NAME is used in analysis only. `identify.classify` and `identify.reclassify` (a trailer claiming a known ECU's address) write "NAME".
 - **Why:** the requirement and the enumeration note disagreed; the requirements win, and DET-18 is the requirement that needs the value.
 - **Affects:** DET-18; `docs/requirements.md` (Enumerated values: Classification rule). `types.CLASSIFICATION_RULES` already holds "NAME". Format stays `log-1`.
@@ -134,7 +134,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-17 — Step 5 freeze: confidence, self-reported identity, make and profile fields, ties, classification rules, inputs  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 5 freeze, branch `step-5-freeze`
-- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (all ten items accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** how `identify` fills the parts of IDN-3, IDN-4, DET-13 and DET-18 that the specs left open:
   1. **Confidence (IDN-3).** The base is the number of identification sources that agree: three (NAME, self-reported reply, request pattern) is high, two is medium, one is low. A source counts when it contributes: NAME when the matched entry's function gate is non-empty and passed, or a rule decided the category from the NAME; self-reported reply when a reply gave a make or model; request pattern when a library entry scored above 0. The IDN-3 and IDN-4 one-step reductions then apply, never below low. The session 142 example (NAME and request pattern, medium) follows this.
   2. **Self-reported identity (IDN-3).** Replies are ASCII fields separated by `*`. Component ID (65259): make is field 1, model is field 2. ECU ID (64965): make is field 5. Software ID (65242): no make or model; its first byte (the field count) is dropped. In the record, each request's `value` is the reply text without its trailing `*`.
@@ -153,7 +153,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-16 — Acknowledgments to the logger are replies to it; monitor and detect interfaces named  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 PRs #14, #15 and #16 (gaps: PR #16 gap 3, PR #14 gap 2, PR #15 gap 1)
-- **Decided by:** Vaughan Lynn, 2026-11-14 ("mark in decode" and "name them in the contracts", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("mark in decode" and "name them in the contracts", chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. `decode` v3: `J1939Msg.reply_to_logger` is also true for an Acknowledgment (59392) whose address byte (byte 5) is the logger's address. J1939 sends a NACK or ACK to global, so before this change a vehicle ECU's NACK to one of the logger's own requests reached `detect` and `monitor` and could be logged as `known_device_new_pgn`. `requests` still reads these NACKs for its outcomes; it does not filter on `reply_to_logger`.
   2. `monitor` v1.1 and `detect` v1.1: the public methods already built in step 4 are named in `docs/modules.md` (constructor, `on_message`, `summary`, `end`, the test seams `open_transfers` and `table_sizes`; `poll`, `sweep_complete`, `no_sweep`, `waiting`, `end_all`, `connections`, `connection_for`, `entry_for`, `name_at`). `monitor`'s rule that an address claim is never a new PGN (step 4 PR 3) is written into its contract. No behaviour change.
@@ -164,7 +164,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-15 — PGNs sent count the carried PGN, not TP.CM and TP.DT  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 PR 1 (`monitor`), pull request #14 (gap 1)
-- **Decided by:** Vaughan Lynn, 2026-11-14 ("fix the example", chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 ("fix the example", chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** `connection_end.pgns_sent` counts the PGN each message carries. A transport-protocol transfer counts once, as its reassembled PGN; TP.CM (60416) and TP.DT (60160) frames are not counted, because `decode` v2 does not return them as messages. In the session 142 example, rec 9 loses its TP.CM and TP.DT rows and gains `pgns_dropped: 0` (DC-13). The chain is recomputed from rec 9, and the `retrieval` record's `last_hash` follows it.
 - **Why:** the example listed TP.CM and TP.DT counts that no module produces. DET-7 asks for "each distinct PGN it sends", which is the carried PGN. Keeping `decode` as it is avoids a decode contract change and transport frames reaching `detect` and `monitor`.
 - **Affects:** DET-7; `docs/log-format.md` (`connection_end` PGNs sent); `docs/examples/s000142_20261106T140211Z.jsonl` (rec 9; chain from rec 9). No contract change. Format stays `log-1`.
@@ -173,7 +173,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-14 — Monitor record fields: control_flag `via` and `raw_capture`, connection_end list entries  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 PR 1 (`monitor`), branch `step-4-monitor`
-- **Decided by:** Vaughan Lynn, 2026-11-14 (all seven items accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (all seven items accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** how the monitor fills the fields that DC-13 and `docs/log-format.md` list but did not spell out:
   1. `control_flag.via` (the field name in the session 142 example) takes DC-13's values: "single frame", "transport (BAM)", "transport (RTS/CTS)" or "requested". The example's `"via": "Request 59904"` becomes `"requested"`; the example chain is recomputed, as in DC-7.
   2. `control_flag.raw_capture` is null until `rawcap` exists (step 6), and afterwards whenever no capture was written (for example, `limits.raw_mb_per_session` used up).
@@ -189,7 +189,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-13 — Step 4 freeze: connection_end writer, DET-3 connections, DET-5 evidence, ETP tracking, inventory input, control-flag fields, known-device new PGNs, silence end, moves, input limits  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, step 4 freeze pull request #13 (gaps 1 to 10)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. `detect` writes `connection_end` and takes the activity fields from `monitor.summary(conn)`.
   2. DET-3: a destination-specific message to an address no claimed NAME holds (not 254, 255, the logger's or a never-claiming inventory address) opens a connection keyed by that SA, trigger "replies sent to SA N".
@@ -208,7 +208,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-12 — Step 3 freeze: transfer replies, send handle, bit rate, rate cap, outstanding requests, breach rules, bus state, restart guard, VIN check, address choice  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 3 freeze pull request #9 (gaps 1 to 10)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session, option B for the VIN; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session, option B for the VIN; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. `decode` v2 produces CTS and EOMA (as well as Connection Abort) `TxRequest`s for transfers addressed to the logger.
   2. `capture` v2 gives `transmit`, and only `transmit`, a send handle on its own socket (`transmit_handle()`), so the logger's frames keep `MSG_CONFIRM` and `Frame.own` stays exact; capture never sends.
@@ -227,7 +227,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-11 — Record numbers continue across parts; session_start keeps every field from step 2  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 2 PR 2 (branch `step-2-session`)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. `rec` counts within the session, not the file: it continues across parts, so event IDs (session and record number) stay unique after a roll-over.
   2. From step 2, `session_start` carries every field in `docs/log-format.md`. Values built in later steps are written as placeholders until then: `vin` null with `vin_status` "unavailable", `logger_sa` null, `logger_claim` "not claimed (transmit starts in step 3)", `restart_guard` "not checked (step 3)", `operator_keys` from the keys folder (empty until step 7), `bitrate_check` saying the bit rate came from the platform until step 3 confirms it from frames.
@@ -239,7 +239,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-10 — Step 2 freeze: time without a clock, vehicle time, state.json, parts, previous-session end, diagnostic log  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 2 freeze pull request #5 (gaps 1 to 10)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. With no valid time (`clock_source` `elapsed`), records have null `utc` and `written` and carry `elapsed_s` (seconds since wake, milliseconds); the session file is named `s<NNNNNN>_noclock.jsonl` when no valid time exists at session start.
   2. `clock` v2 adds `veh_time(ts_mono)` (vehicle time from the Time/Date offset, whole seconds, None before the first reply) and `elapsed_s(ts_mono)`.
@@ -258,7 +258,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-9 — Step 1 runs the pipeline with a minimal session, a wake-timing category and the config file read directly  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1 PR 2 (branch `step-1-logic`)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   1. Step 1 includes a minimal `session`: a main loop that runs capture, decode, clock, detect and eventlog, and syncs at once after a `connection_start` (DET-16). The rest of `session` (header, end record, parts, roll-over, `state.json`, self-check, watchdog, restart guard) is built against its frozen contract in step 2.
   2. Step 1's minimal `detect`: an address claim by a NAME that is not in the inventory opens a connection and writes `connection_start` with `classification_rule` "wake timing": a first claim within `classify.wake_window_s` of the session's first frame gives "vehicle ECU not in baseline", a later one "external device (unrecognized)", both high. With no inventory the session is untrained and severity is capped at notice (TRN-9). An approved external device in the inventory gets an info `connection_start` in the short form (NAME and entry ID). Baseline ECUs get none. `identify` takes over classification in step 5; the rest of `detect` comes in step 4.
@@ -270,7 +270,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-8 — Step 1 freeze: defined outputs for capture and decode, TxRequest in the shared types, eventlog's step 1 scope  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, step 1 freeze pull request #3 (gaps 1 to 6)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** before the step 1 contracts freeze, outputs that were named but not defined are defined:
   1. `CaptureStats`: `kernel_drops: int`, `rx_buffer_bytes: int`, `frames: dict[str, int]` (keys `extended`, `standard`, `remote`, `error`).
   2. `DecodeStats`: `non_j1939: dict[str, int]` (keys `standard`, `remote`, `error`), `tp_closed: dict[str, int]` and `malformed: dict[str, int]` (by reason), `etp_seen: int`. Decode's state is a `DecodeState` that only `decode` reads or changes.
@@ -285,7 +285,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-7 — Example files use the enumerated values; approval kind "inventory"  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1, pull request #2 (item 7, parts b and c)
-- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:**
   - (b) Record fields that take an Enumerated value hold exactly that value; detail goes in its own field. In the session 142 example: the Component ID request outcome "no reply after 1 retry" becomes "no reply" (NP-14 already means one retry); `classification_rule` "wake timing (first claim 29 min after the session's first frame)" becomes "wake timing", with the detail in a new `classification_detail` field on `connection_start`; `id_source` becomes a list of Identification source values, `["NAME", "request pattern"]` (the function code and library version are already in the record's NAME fields and the session header). In `inv-v2.json` an approved PGN's `kind` "sent" becomes "PGN sent". The session file's hash chain is recomputed from record 5, and the `retrieval` record's `last_hash` follows it.
   - (c) The requirements' Approval kind enum gains "inventory" (confirming a trained inventory), which `docs/log-format.md` already lists for the `approval` record.
@@ -296,7 +296,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-6 — Step 1 interface clarifications  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1, pull request #2 ("[step 1 | interfaces] ...")
-- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** ten points the step 1 interface code exposed, each settled as follows:
   1. `Paths(card, flash, keys)` is defined in `platform/interface.py`, not in the shared types.
   2. Platform `now()` reports `rtc`, or `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset.
@@ -316,7 +316,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-5 — Platform `fault(op)` for socket and storage fault injection  (accepted, 2026-11-13)
 - **Raised by:** Claude Code, build step 1, pull request #2, as the question DC-new-20261113-fault-delivery
-- **Decided by:** Vaughan Lynn, 2026-11-13 (option B; chosen in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-13 (option B; chosen in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-14, in the safety-critical review (reported by Vaughan Lynn in the Claude Code session))
 - **Change:** the platform contract goes from v1 to v2 with a ninth function, `fault(op: str) -> None`. Layer 1 modules call it just before each operation in `FAULT_OPS`: `can_recv` (`capture`), `can_send` (`transmit`), `card_write` (`eventlog`, `store`, `rawcap`), `card_sync` (`eventlog`, `store`) and `flash_write` (`store`). `DesktopPlatform` raises `PlatformError(kind)` while a planned fault is active for that operation: `can_down` (`can_recv`, `can_send`), `enobufs` (`can_send`), `enospc`, `erofs` (`card_write`), `eio`, `card_removed` (`card_write`, `card_sync`), `state_unwritable` (`flash_write`); `slow_sync` delays `card_sync` by `args["s"]` seconds instead of raising. `args["ops"]` narrows a kind to some of its operations. Hardware implementations do nothing in `fault()`.
   Fault-plan semantics (all kinds the plan delivers): a fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run; `clock_jump` steps wall time by `args["s"]` when monotonic time reaches `at_mono`. The plan also delivers `can_missing` (`open_can()`), `no_bitrate` (`bitrate_check()` returns None) and `rtc_invalid` (`rtc_ok()` False, `now()` source `elapsed`).
 - **Why:** the fault plan must inject the socket and storage errors in `docs/errors.md`, which are detected in modules that otherwise never call the platform. Of the options raised (A: route all I/O through the platform; B: one `fault(op)` hook; C: inject by harness and traffic only), B keeps the platform small and leaves real I/O in the layer 1 modules.
