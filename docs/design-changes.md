@@ -31,9 +31,9 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
-## DC-new-20261114-codeowners — Add the transmit decisions in `session`, and `capture`, to the safety-critical paths  (proposed, 2026-11-14)
+## DC-25 — Add the transmit decisions in `session`, and `capture`, to the safety-critical paths  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `dc-codeowners` (found after QC items 6 and 11: the NP-18 guard moved into the `session` package)
-- **Decided by:**
+- **Decided by:** Vaughan Lynn, 2026-11-14 (accepted as proposed in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
 - **Change:** `docs/modules.md` §2 names the safety-critical paths that need a review by Vaughan Lynn or Elijah Umaru on every change: `transmit`, allow-list validation in `config`, hashing in `eventlog`, and `platform`. Proposed: add
   - `session/can.py`: the bit-rate switch to normal mode (NP-1, NP-2, NP-17), turning transmit on, the NP-18 guard `_tx_call` and `_transmit_off`;
   - `session/core.py`: listen-only at session start, the NP-3 bus-state path, the NP-19 restart guard and building `Transmit`;
@@ -41,12 +41,12 @@ Read this file at the start of every session, after `CLAUDE.md`.
   - `tests/contract/`: the checks that only `transmit` sends and only `session` hands it the send handle (rule 4, DC-12), so they cannot be weakened unreviewed;
   - `.github/CODEOWNERS` itself, so the list cannot be shortened unreviewed.
 
-  `.github/CODEOWNERS` gets the same paths with `@vaughan2017 @Davidelija`. A contract test, `test_DC_n_codeowners_covers_every_safety_critical_path`, reads the list in `docs/modules.md` §2 and fails if a path in it is missing from `.github/CODEOWNERS`.
+  `.github/CODEOWNERS` gets the same paths with `@vaughan2017 @Davidelija`. A contract test, `test_DC_25_codeowners_covers_every_safety_critical_path`, reads the list in `docs/modules.md` §2 and fails if a path in it is missing from `.github/CODEOWNERS`.
 - **Why:** Since the session split (PR #31) and the NP-18 fallback (PR #32), code that decides whether the logger transmits lives in `session/can.py` and `session/core.py`. Neither is in CODEOWNERS, so once branch protection requires code-owner review, a change there would still need no project-member review. The same holds for `capture.py`'s listen-only mode and for the contract tests that enforce rule 4.
-- **Alternative:** list the whole `session/` package. Simpler, but every change to commands, card handling or identification would then need a code-owner review too.
+- **Alternative (not chosen):** list the whole `session/` package. Simpler, but every change to commands, card handling or identification would then need a code-owner review too.
 - **Affects:** `docs/modules.md` §2 (the safety-critical sentence); `.github/CODEOWNERS`; `docs/handoff.md` (the repository layout line for CODEOWNERS). No requirement, contract, record or format change; no module contract version change.
-- **Docs updated in the same change (once accepted):** `docs/modules.md`, `docs/handoff.md`, `.github/CODEOWNERS`, `CHANGELOG.md`, `docs/reviews.md`.
-- **Tests:** `test_DC_n_codeowners_covers_every_safety_critical_path` in `tests/contract/` (n is the number given at acceptance).
+- **Docs updated in the same change:** `docs/modules.md` (§2 names every safety-critical path by file), `docs/handoff.md`, `.github/CODEOWNERS`, `CHANGELOG.md`, `docs/reviews.md`.
+- **Tests:** `test_DC_25_codeowners_covers_every_safety_critical_path` and `test_DC_25_every_safety_critical_path_exists` in `tests/contract/test_codeowners.py`.
 
 ## DC-23 — The rate limits are config parameters that can lower the release cap but never raise it  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `docs-qc-2` (QC report, after the QC-1 fixes in PR #30)
