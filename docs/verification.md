@@ -166,6 +166,8 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | PLT-7 | A | 8 |  |  |  |  |  |
 | PLT-8 | I, T | 8 |  |  |  |  |  |
 
+**Test levels (DC-24):** the session tests in `tests/unit/test_session_*.py` count as level 2 (component) evidence until `tests/component/` exists; no row claims level 3 (replay) beyond the two `vcan0` tests. Coverage of each communications case is in `docs/test-plan.md` §5.
+
 ## Per-clause tests for safety-critical requirements
 
 The safety-critical rows (transmit and its limits: NP-1, NP-3, NP-9, NP-16 to NP-19; hashing: LOG-5 and LOG-14) are split here into their clauses, each with the tests that assert it, so a reviewer can check every clause without reading every test. Test names leave out the `test_` prefix; all are in `tests/unit/` unless noted. Clauses that need hardware say so. Keep this section current with the matrix above.

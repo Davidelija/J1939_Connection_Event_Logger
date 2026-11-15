@@ -60,4 +60,5 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - NP-18: if `transmit.disable` itself raises while turning transmit off, the session writes the high fault itself, keeps transmit off for the rest of the session and keeps logging; nothing escapes.
 - `docs/verification.md` lists the tests for each clause of the safety-critical requirements (NP-1, NP-3, NP-9, NP-16 to NP-19, LOG-5, LOG-14); two clauses gained tests: NP-3 error-passive from the logger's own transmit errors, and LOG-5's incomplete last line never being rewritten.
 - User manual: the step 6 and 7 sections are written (what you need, connecting the laptop, the status light, training, changing the inventory, reading the report, opening raw captures).
-- Proposed, not yet accepted: DC entries for the rate-cap wording (NP-16) and for counting the in-process session tests as level 2.
+- DC-23: NP-16 and the `transmit` and `config` contracts now say the rate limits can be lowered but never raised (10 frames/s, 1 outstanding per destination); text only, the code already did this.
+- DC-24: until `tests/component/` exists, the in-process session tests count as level 2; `docs/test-plan.md` §5 shows what covers each communications case today and what still needs replay or the rig.
