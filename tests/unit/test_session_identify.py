@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, cast
 
+import pytest
+
 from j1939logger.config import Inventory
 from j1939logger.main import inventory_from_file
 from j1939logger.platform.desktop import DesktopPlatform, FakeClock
@@ -124,6 +126,34 @@ def test_IDN_4_session_identifies_the_scan_tool_when_its_identity_requests_finis
     )  # fmt: skip
     assert ident["id_source"] == ["NAME", "request pattern"] and ident["confidence"] == "medium"
     assert [r["outcome"] for r in ident["requests"]] == ["no reply"] * 3
+
+
+def test_IDN_4_identify_sees_requests_up_to_identification_then_the_whole_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from j1939logger.identify import identify as real
+
+    seen: list[frozenset[int]] = []
+
+    def spy(conn: Any, outcomes: Any, requested: Any, *a: Any, **k: Any) -> Any:
+        if conn.sa == 249:
+            seen.append(frozenset(requested))
+        return real(conn, outcomes, requested, *a, **k)
+
+    monkeypatch.setattr("j1939logger.session.identification.identify", spy)
+    s, fc = make(tmp_path)
+    started(s, fc)
+    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    run(s, fc, 0.5, 0, 249)
+    requests_from(s, fc, 249, [65260, 65259, 65226])  # session 142's set at identification
+    run(s, fc, 12.0, 0, 249)  # the identity requests finish: identification
+    requests_from(s, fc, 249, [65227, 65235])  # DM2 and DM11 come later
+    run(s, fc, 31.0)  # key-off: connection_end
+    assert seen[0] == {65260, 65259, 65226}  # only what was seen before identification
+    assert seen[-1] == {65260, 65259, 65226, 65227, 65235}  # the whole connection (DC-17)
+    assert len(seen) == 2
+    [ident] = [r for r in records(tmp_path) if r["type"] == "identification"]
+    assert ident["type_guess"] == "diagnostic tool, code reader"
 
 
 def test_IDN_4_connection_end_carries_the_final_identification_when_it_changes(

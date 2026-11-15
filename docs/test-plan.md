@@ -121,7 +121,7 @@ Written against the contract frozen for the build step (`docs/modules.md` §6). 
 
 **Contract tests (`tests/contract/`):** mypy checks each implementation against its `Protocol`; one test per module imports only the public names in `docs/modules.md` §4; the import-linter rule checks the layers. Added with each module's freeze.
 
-**Malformed input (`tests/malformed/`, SC-12a):** Hypothesis starts with `decode` in **step 1** (bad lengths, out-of-order and duplicate TP.DT, RTS over 1785 bytes, aborts, ETP fragments, bad and all-zero NAMEs) and adds `monitor` in step 4 (floods of new addresses and PGNs). Properties: no unhandled exception, decoding continues, open transfers never exceed `limits.tp_sessions`, PGNs per connection never exceed `limits.pgns_per_conn`, malformed counts match what was sent. Fixed seed in CI, random seed nightly; failures saved as regression cases.
+**Malformed input (`tests/malformed/`, SC-12a):** Hypothesis starts with `decode` in **step 1** (bad lengths, out-of-order and duplicate TP.DT, RTS over 1785 bytes, aborts, ETP fragments, bad and all-zero NAMEs) and adds `monitor` in step 4 (floods of new addresses and PGNs). Properties: no unhandled exception, decoding continues, open transfers never exceed `limits.tp_sessions`, PGNs per connection never exceed `limits.pgns_per_conn`, malformed counts match what was sent. Fixed seed in CI, random seed nightly (`.github/workflows/nightly.yml`, the seed in the job summary); failures saved as regression cases in `tests/malformed/regressions/` (format in its README), replayed in every CI run by `test_SC_12a_saved_regressions_replay`.
 
 ## 5. Communications tests
 

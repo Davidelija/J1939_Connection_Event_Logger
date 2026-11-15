@@ -7,9 +7,11 @@ which checks them again (DC-12).
 * Address choice (NP-4, DC-12): from ``address.claim_from`` down to
   ``address.claim_down_to``, skipping the inventory's addresses, addresses
   claimed so far this session and ``address.reserved``.
-* The logger's NAME is arbitrary-address-capable, on-highway, with every other
-  field at its maximum (NP-5), so it is higher than any vehicle NAME and loses
-  every contest: a claim by another NAME for the logger's address takes it.
+* The logger's NAME is arbitrary-address-capable, on-highway (industry group 1),
+  with every other field at its maximum (NP-5). That makes it higher than any
+  on-highway vehicle NAME, but not the highest possible: NAMEs in industry groups
+  2 to 5 are higher. The logger concedes every contest by design, whatever the
+  other NAME: a claim by another NAME for the logger's address takes it.
 * On losing (NP-7): one more address; after ``address.claim_retries`` + 1
   losses, Cannot Claim (a claim from the null address, 254) and receive-only
   for the session. Each loss is an ``address_conflict`` record (DET-4).
@@ -113,8 +115,9 @@ class Address:
             self._claimed_by_others.add(msg.sa)
         if self.current is None or msg.sa != self.current:
             return [], []
-        # Another NAME claims the logger's address. The logger's NAME is the highest
-        # possible, so it always concedes (NP-5, NP-7).
+        # Another NAME claims the logger's address. The logger concedes every contest
+        # by design, even to a higher NAME (industry groups 2 to 5) that J1939 address
+        # arbitration would let it beat (NP-5, NP-7).
         other = int.from_bytes(msg.data, "little")
         lost_sa = self.current
         self._losses += 1

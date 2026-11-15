@@ -259,6 +259,7 @@ j1939-logger/
   .github/pull_request_template.md   definition of done and the state block
   .github/CODEOWNERS         human review for the safety-critical paths (modules.md section 2, DC-25) and docs
   .github/workflows/ci.yml   vcan0 tests, ruff, mypy, coverage, demo, verification check
+  .github/workflows/nightly.yml   tests/malformed with a random Hypothesis seed, nightly
   release/
     install.sh               offline install; checks ext4, raises rmem_max, hardening
     keys.sh                  operator keys and the fingerprint-to-name file

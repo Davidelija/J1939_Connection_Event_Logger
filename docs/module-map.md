@@ -72,6 +72,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | `tools/check_verification.py` | CI coverage check (DC-2): every T requirement of a merged step names an existing test; release mode also needs results and no `errors.md` placeholders. | 1 | ✅ |
 | `.github/workflows/ci.yml` | CI on every push: `vcan0`, can-utils, ruff, mypy, import-linter, pytest with coverage, the no-hardware demo, the coverage check. | 1–2 | ✅ |
+| `.github/workflows/nightly.yml` | Nightly (and on demand): `tests/malformed` with a random Hypothesis seed, written to the job summary; failures are saved in `tests/malformed/regressions/`. | QC-3 | ✅ |
 | `tools/verify_chain.py` | Standalone chain verifier: checks session files across parts and sessions, names changed and missing records, reports truncated lines, new cards and open sessions without failing, refuses unknown formats. | 2 | ✅ |
 | `tools/troubleshooting.py` | Generates the user manual's troubleshooting table from `docs/errors.md` (light, what happened, what the logger does, what to do); `--check` runs in CI and fails when the manual is out of date (DC-22). | 7 | ✅ |
 | `demo/run_demo.sh` | No-hardware demo on `vcan0`: runs the logger, replays the session 142 capture, verifies the chain and checks the scan tool's `connection_start`; also the CI smoke test. The laptop tool joins in step 7. | 2 | ✅ |

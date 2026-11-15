@@ -1,0 +1,36 @@
+# Nightly malformed-input run with a random Hypothesis seed (test plan section 4, QC U5).
+# Every-push CI (ci.yml) uses a fixed seed; this job explores new inputs each night. The seed
+# goes in the job summary; save a failing example in tests/malformed/regressions/ (see its
+# README) so CI replays it on every run.
+name: Nightly malformed input
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC every day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  malformed-random-seed:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: src
+      HYPOTHESIS_PROFILE: nightly
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.9"
+
+      - name: Install pinned dev tools (by hash)
+        run: python -m pip install --require-hashes -r requirements/dev.txt
+
+      - name: tests/malformed with a random seed
+        run: |
+          SEED=$(python -c "import secrets; print(secrets.randbits(32))")
+          echo "Hypothesis seed: $SEED" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Reproduce: python -m pytest tests/malformed --hypothesis-seed=$SEED" >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/malformed -p no:cacheprovider --hypothesis-seed="$SEED"
