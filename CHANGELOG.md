@@ -62,3 +62,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - User manual: the step 6 and 7 sections are written (what you need, connecting the laptop, the status light, training, changing the inventory, reading the report, opening raw captures).
 - DC-23: NP-16 and the `transmit` and `config` contracts now say the rate limits can be lowered but never raised (10 frames/s, 1 outstanding per destination); text only, the code already did this.
 - DC-24: until `tests/component/` exists, the in-process session tests count as level 2; `docs/test-plan.md` §5 shows what covers each communications case today and what still needs replay or the rig.
+- Session-level tests for three communications cases that had only module tests: COM-04 (baseline holds 247 and 246, so the logger claims 245), COM-07 (sweep after claiming and every 10 minutes over 35 minutes) and COM-17 (a Commanded Address to the logger's NAME is ignored).

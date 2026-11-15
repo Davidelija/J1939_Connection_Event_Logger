@@ -158,10 +158,10 @@ What covers each case before `tests/component/` and `tests/replay/` exist. **Lev
 | COM-01 | `NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed` | `SC_2_read_batch_never_waits_and_keeps_order` | Rig A1 at 250 and 500 kbit/s |
 | COM-02 | `NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed`, `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | `NP_17_nothing_is_sent_before_transmit_is_enabled` | Replay with a witness from power-on; rig A2 |
 | COM-03 | `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | `NP_17_no_bitrate_fault_gives_none_while_active`, `STS_1_light_priority_fast_over_slow_over_steady` | Covered |
-| COM-04 | `NP_1_claim_first_then_header_with_the_claim_result_then_requests` (247 on an empty baseline, 250 ms) | `NP_4_claims_247_first_with_the_logger_name`, `NP_4_skips_inventory_claimed_and_reserved_addresses`, `NP_5_logger_name_is_arbitrary_address_capable_and_maximal`, `NP_6_nothing_but_claims_for_250_ms_after_a_claim` | A session run with baseline 247 and 246 claiming 245; replay |
+| COM-04 | `NP_4_session_skips_baseline_247_and_246_and_claims_245`, `NP_1_claim_first_then_header_with_the_claim_result_then_requests` | `NP_4_claims_247_first_with_the_logger_name`, `NP_4_skips_inventory_claimed_and_reserved_addresses`, `NP_5_logger_name_is_arbitrary_address_capable_and_maximal`, `NP_6_nothing_but_claims_for_250_ms_after_a_claim` | Replay |
 | COM-05 | `NP_7_contest_at_247_concedes_and_claims_246` (one contest) | `NP_7_concedes_tries_once_more_then_cannot_claim`, `NP_7_after_cannot_claim_answers_requests_with_cannot_claim`, `DET_4_own_claims_are_not_contests` | Replay with `ecu_sim` contesting twice; rig A3 |
 | COM-06 | `NP_8_request_to_the_logger_is_nacked` | `NP_8_answers_request_for_address_claim`, `NP_8_nacks_other_requests_to_the_logger_and_ignores_global_ones` | A session run of the re-claim |
-| COM-07 | None | `NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa`, `NP_11_sweep_repeats_every_10_minutes`, `LOG_9_first_sweep_is_logged_then_only_changes` | A 35-minute session run |
+| COM-07 | `NP_11_session_sweeps_after_claiming_and_every_10_minutes` (35 minutes) | `NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa`, `NP_11_sweep_repeats_every_10_minutes`, `LOG_9_first_sweep_is_logged_then_only_changes` | Covered |
 | COM-08 | `NP_12_vin_reply_gives_vin_check_match`, `NP_14_no_vin_reply_gives_vin_check_unavailable` | `NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa` | Replay with `ecu_sim` at SA 0 |
 | COM-09 | `NP_13_new_device_is_asked_for_its_identity` | `NP_13_known_name_is_not_asked_for_identity`, `NP_14_timeout_retry_once_then_no_reply_and_never_repeated`, `NP_14_reply_value_is_kept_for_identify` | Replay with the three outcomes from `ecu_sim` |
 | COM-10 | `NP_18_send_error_turns_transmit_off_with_a_high_fault`, `NP_18_unexpected_error_in_requests_turns_transmit_off_and_logging_continues`, `NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_continues`, `NP_18_error_inside_transmit_disable_still_keeps_logging`, `NP_16_witness_over_a_busy_minute` | `NP_9_breach_is_never_sent_and_turns_transmit_off`, `NP_16_*`, `NP_18_enobufs_*`, `NP_18_transmit_never_turns_back_on_in_the_session` | Rig A3 |
@@ -171,7 +171,7 @@ What covers each case before `tests/component/` and `tests/replay/` exist. **Lev
 | COM-14 | `NP_19_restart_loop_starts_listen_only_with_a_high_fault` | None | Replay killing the service 3 times |
 | COM-15 | None | None | Rig A3 only |
 | COM-16 | None | None | Rig A4 only |
-| COM-17 | None | `NP_8_commanded_address_to_the_logger_is_ignored` | A session run; replay |
+| COM-17 | `NP_8_session_ignores_a_commanded_address_to_its_name` (BAM from 249, checked to reach `address`) | `NP_8_commanded_address_to_the_logger_is_ignored` | Replay |
 
 
 ## 6. Detection and identification tests
