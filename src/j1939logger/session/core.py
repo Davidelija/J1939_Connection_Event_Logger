@@ -67,8 +67,8 @@ class Session(_CanPart, _CardPart, _CommandsPart, _IdentificationPart):
             state = bus_state(f)
             if state is not None:
                 self._bus_off = self._bus_off or state == "bus_off"
-                if self.transmit is not None and self.transmit.enabled:
-                    self.transmit.disable(state)  # NP-3
+                if self.transmit is not None and self.transmit.enabled and not self._tx_failed:
+                    self._transmit_off(state)  # NP-3
         msgs, stats, tx, self._decode_state = decode(
             frames, self._decode_state, logger_sa=self.logger_sa
         )
@@ -300,6 +300,7 @@ class Session(_CanPart, _CardPart, _CommandsPart, _IdentificationPart):
         self._high_fault = None
         self._vin_status = None
         self._tx_failed = False
+        self._tx_off_reason = None
         self._dropped = False
         self._vin_received = None
         self.rawcap = RawCap(self._platform, self._settings, session)
@@ -395,8 +396,8 @@ class Session(_CanPart, _CardPart, _CommandsPart, _IdentificationPart):
             return "not claimed (restart guard: transmit disabled)"
         if self._bitrate is None:
             return "not claimed (bit rate not confirmed)"
-        if self.transmit is not None and self.transmit.off_reason is not None:
-            return f"not claimed (transmit off: {self.transmit.off_reason})"
+        if self._transmit_off_reason() is not None:
+            return f"not claimed (transmit off: {self._transmit_off_reason()})"
         if self.address is not None and self.address.lost:
             return "Cannot Claim; receive-only for the session"
         if self.logger_sa is not None:

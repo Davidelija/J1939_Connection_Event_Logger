@@ -450,3 +450,26 @@ def test_NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_contin
     assert len(_transmit_off(recs, "address.on_message")) == 1
     assert any(r["type"] == "connection_start" and r["sa"] == 249 for r in recs)
     assert recs[-1]["type"] == "session_end"
+
+
+def test_NP_18_error_inside_transmit_disable_still_keeps_logging(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    assert s.requests is not None and s.transmit is not None
+    s.transmit.disable = _broken  # type: ignore[method-assign]  # turning off fails too
+    s.requests.poll = _broken  # type: ignore[method-assign]
+    run(s, fc, 1.0)  # nothing escapes
+    status = s.handle("status")["result"]
+    assert status["transmit"] == "off: unexpected error: RuntimeError in requests.poll"
+    before = len(sent)
+    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    run(s, fc, 2.0)
+    assert len(sent) == before  # no more calls into transmit this session
+    stop(s)
+    recs = records(tmp_path)
+    assert len(_transmit_off(recs, "requests.poll")) == 1  # written by the session itself
+    assert any(r["type"] == "connection_start" and r["sa"] == 249 for r in recs)
+    assert recs[-1]["type"] == "session_end"
+    diag = (tmp_path / "card" / "diag" / "logger.log").read_text("utf-8")
+    assert "transmit.disable" in diag and "RuntimeError: probe" in diag
