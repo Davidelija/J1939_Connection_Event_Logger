@@ -600,3 +600,26 @@ def test_NP_13_train_start_asks_identity_from_every_device_present(tmp_path: Pat
     assert identity <= {pgn for da, pgn in after if da == 249}  # the scan tool's one more try
     assert all(da in (0, 249) for da, _ in after)  # never the logger itself
     witness(sent)  # still within the allow-lists and the rate cap
+
+
+def test_NP_13_identity_replies_before_train_start_are_reused(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    s.capture._ingest(_claim(ENGINE, 0, fc.mono()))
+    run(s, fc, 1.0)
+    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    for _ in range(100):  # until the scan tool is asked for its Component ID
+        run(s, fc, 0.1)
+        if (249, 65259) in _requests_after(sent, 0):
+            break
+    s.capture._ingest(frame((6 << 26) | (0xFEEB << 8) | 249, b"ACME*CR*", fc.mono()))  # reply
+    run(s, fc, 20.0)  # Software ID and ECU ID get no reply
+    before = len(sent)
+    s.train_start("jdoe")
+    run(s, fc, 20.0)
+    asked = {pgn for da, pgn in _requests_after(sent, before) if da == 249}
+    assert asked == {65242, 64965}  # the failed two, once more; Component ID is not asked again
+    proposal = s.train_finish("jdoe")
+    stop(s)
+    [scan] = [e for e in proposal["entries"] if e["addresses"] == [249]]
+    assert scan["self_reported"]["component_id"] == "ACME*CR"  # the earlier reply, reused (DC-26)

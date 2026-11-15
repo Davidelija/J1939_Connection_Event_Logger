@@ -20,6 +20,10 @@ followed by the record without ``hash``, serialized the same way.
 
 Storage errors never crash the logger: the record is not written, the chain
 is left as it was, and a ``fault`` record (LOG-22) waits in ``take_faults()``.
+A repeated storage error is reported once, with a count (CLAUDE.md rule 14): an
+outage has one ``fault`` record. It is handed out again until it is written, and
+records lost meanwhile are only counted; when it is written, its
+``logger_action`` gives the count.
 """
 
 from __future__ import annotations
@@ -126,6 +130,8 @@ class EventLog:
         self._rec = first_rec
         self._fd: Optional[int] = None
         self._faults: list[Record] = []
+        self._outage: Optional[Record] = None  # the outage's one fault record (rule 14)
+        self._outage_lost = 0  # records not written since the outage began
         self._lock = threading.Lock()
         self._sync_stop = threading.Event()
         self._sync_thread: Optional[threading.Thread] = None
@@ -179,6 +185,11 @@ class EventLog:
             return self._append(record)
 
     def _append(self, record: Record) -> Optional[str]:
+        if record is self._outage:
+            record.fields["logger_action"] = (
+                "record not written" if self._outage_lost <= 1
+                else f"{self._outage_lost} records not written; recording continues"
+            )  # fmt: skip
         reading = self._clock.now()
         rec = self._rec
         body: dict[str, Any] = {
@@ -210,11 +221,13 @@ class EventLog:
             if written != len(line):
                 raise OSError(f"short write: {written} of {len(line)} bytes")
         except (PlatformError, OSError) as exc:
-            self._storage_fault(exc)
+            self._storage_fault(exc, record)
             return None
         self._prev = digest
         self._rec = rec + 1
         record.event_id = f"{self._session}-{rec}"
+        if record is self._outage:
+            self._outage, self._outage_lost = None, 0  # the outage is reported: it is over
         return record.event_id
 
     def sync_now(self) -> bool:
@@ -247,16 +260,23 @@ class EventLog:
         out, self._faults = self._faults, []
         return out
 
-    def _storage_fault(self, exc: BaseException) -> None:
+    def _storage_fault(self, exc: BaseException, record: Optional[Record] = None) -> None:
         kind = exc.kind if isinstance(exc, PlatformError) else type(exc).__name__
         if self._fd is not None and isinstance(exc, PlatformError) and exc.kind == "card_removed":
             self._close_fd()  # reopened on the next write, after reinsertion
-        self._faults.append(
-            Record(
-                type="fault",
-                sev="high",
-                utc=self._clock.to_utc(self._clock.mono()),
-                veh_time=None,
-                fields={"cause": f"storage error ({kind})", "logger_action": "record not written"},
-            )
+        if self._outage is not None:  # the same outage: not reported again (rule 14)
+            if record is self._outage:
+                if not any(f is record for f in self._faults):
+                    self._faults.append(record)  # handed out again until it is written
+            elif record is not None:
+                self._outage_lost += 1
+            return
+        self._outage = Record(
+            type="fault",
+            sev="high",
+            utc=self._clock.to_utc(self._clock.mono()),
+            veh_time=None,
+            fields={"cause": f"storage error ({kind})", "logger_action": "record not written"},
         )
+        self._outage_lost = 1 if record is not None else 0
+        self._faults.append(self._outage)
