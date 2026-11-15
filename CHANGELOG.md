@@ -75,3 +75,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - DC-26: a test that identity replies received before `train start` are reused in training and not asked again.
 - Review record: DC-26 and the R2 start-up card check reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); DC-26 confirmed.
 - Review record: PR #37 (one fault per storage outage; the DC-26 reuse test) reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14).
+- Review record: the rest of QC-3 (U1 to U5, R3, R4, the verification results) reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); the whole of PR #36 is now on record.
