@@ -47,7 +47,7 @@ This doc lists every requirement identified so far for the J1939 diagnostic-port
 | NP-13 | The logger shall request Component ID (65259), Software ID (65242) and ECU ID (64965) from each source address not held by a known NAME, and from every device during training; a known NAME at a new address is not asked again. | T | Agreed | Architecture: Request scheduler |
 | NP-14 | Each request shall wait 1.25 s for a reply and retry once; the logger shall record the reply, NACK or no response, and shall not repeat a failed request in the same session. | T | Agreed | Architecture: Request scheduler |
 | NP-15 | The logger shall exclude its own transmissions, and replies addressed to it, from detection. | T | Agreed | Detection doc: Logger's own traffic |
-| NP-16 | The logger shall transmit at most 10 frames per second in total, with at most one outstanding request per destination; address-claim replies and NACKs shall go ahead of queued requests. Both limits are config parameters. | T | Agreed | Decision D9 |
+| NP-16 | The logger shall transmit at most 10 frames per second in total, with at most one outstanding request per destination; address-claim replies and NACKs shall go ahead of queued requests. Both limits are config parameters that may lower, but never raise, the release values of 10 frames per second and one outstanding request per destination; a config that asks for more, zero or a negative value is refused (DC-23). | T | Agreed | Decision D9 |
 | NP-17 | If neither bit rate is confirmed, the logger shall stay listen-only and keep trying; after 60 s it shall log a fault and show the fault state. It shall never transmit before a bit rate is confirmed. | T | Agreed | Review C2 |
 | NP-18 | Any unexpected error in the transmit or request code, or a frame that would break the allow-list (NP-9) or the rate cap (NP-16), shall turn transmission off for the rest of the session and log a high fault; the offending frame is never sent. | T | Agreed | Reliability review R5 |
 | NP-19 | (a) The service unit shall wait between restarts (RestartSec, initially 5 s) and cap restarts per time window. (b) After restart\_guard.count (3) unclean restarts within restart\_guard.window\_min (10 minutes), the next session shall start listen-only with transmit off: no address claim, sweep or requests. (c) The logger shall log a high fault ("restart loop; transmit disabled") and show fast blink until an operator runs `restart`. Detection continues listen-only. | T | Agreed | Final review F5 |
@@ -286,8 +286,8 @@ Defaults are those in `cfg-v3`. Each parameter lives in the versioned config fil
 | `requests.sweep_interval_min` | 10 min | NP-11 |
 | `requests.timeout_s`, `requests.retries` | 1.25 s, 1 | NP-14 |
 | `transmit.allow_list` | 59904, 60928, 59392, 60416 | NP-9 |
-| `transmit.max_frames_per_s` | 10 | NP-16 |
-| `transmit.max_outstanding_per_dest` | 1 | NP-16 |
+| `transmit.max_frames_per_s` | 10 (maximum; can only be lowered, DC-23) | NP-16 |
+| `transmit.max_outstanding_per_dest` | 1 (maximum; can only be lowered, DC-23) | NP-16 |
 | `detection.silence_end_s` | 60 s | DET-6 |
 | `detection.requests_kept` | 100 | DET-8 |
 | `detection.control_pgns` | 0, 256, 1024, 65240, 56832, 65235 | DET-9 |

@@ -208,6 +208,25 @@ def test_LOG_12_power_loss_reports_bytes_cut_off_and_chain_continues(tmp_path: P
     assert first2["prev"] == complete[-1]["hash"]
 
 
+def test_LOG_5_incomplete_last_line_is_never_rewritten(tmp_path: Path) -> None:
+    s, fc, _ = make(tmp_path)
+    s.start()
+    feed(s, fc, 2)
+    s.capture.stop()  # power lost: no session_end
+    assert s.eventlog is not None
+    path = s.eventlog.path
+    s.eventlog.close()
+    with open(path, "ab") as f:
+        f.write(b'{"rec":9,"type":"conn')
+    before = path.read_bytes()
+    s2, _, _ = make(tmp_path, fc=fc)
+    s2.start()
+    feed(s2, fc, 2)
+    stop(s2)
+    assert path.read_bytes() == before  # the cut-off line stays exactly as it was
+    assert len(session_files(tmp_path / "card" / "sessions")) == 2
+
+
 def test_LOG_18_software_restart_cause_from_the_diagnostic_log(tmp_path: Path) -> None:
     s, fc, _ = make(tmp_path)
     s.start()

@@ -35,6 +35,8 @@ The levels are the ones in `docs/modules.md` §5. Each uses only its listed entr
 | 3. Replay (end to end) | The service on `vcan0`; commands through `j1939cmd` | What needs a real bus or process: the witness, closed-loop `ecu_sim` responders, the command path over SSH, `demo/run_demo.sh` | Real time | CI, every push |
 | 4. Acceptance | `bench/` procedures A1 to A8 and the SC-9, SC-10 and SC-11 runs | Hardware results | Real time | On the rig, per tier |
 
+**Level 2 today (DC-24):** until the test-script writers add `tests/component/`, the session tests in `tests/unit/test_session_*.py` are the level 2 evidence: they already run `session` in-process with `DesktopPlatform(fault_plan)` and `FakeClock`. Level 3 is not claimed as covered; the coverage of each COM case is in §5. This note goes when `tests/component/` and `tests/replay/` land.
+
 **Folders:** level 1 in `tests/unit/`, `tests/contract/` and `tests/malformed/`; level 2 in `tests/component/`; level 3 in `tests/replay/`, with helpers in `tests/harness/` and fixture folders in `tests/fixtures/`; level 4 in `bench/` (see the repository layout in `docs/handoff.md`).
 
 **Why time-based tests are component tests:** `canplayer` plays in real time, so a 24 h roll-over over replay takes 24 h. At level 2 the fixture's frames are fed in-process and `FakeClock` is advanced, so the same scenario runs in seconds. Replay is kept for what genuinely needs a bus.
@@ -146,6 +148,31 @@ Communications tests prove the logger joins the bus safely. Level shows where ea
 | COM-17 | Commanded Address to the logger | Component; replay | Commanded Address (65240) naming the logger's NAME | Ignored: no address change, no claim at the commanded address, no transmit | NP-8 |
 
 Every replay test also checks the transmit statement: the PGNs the logger sent in the whole run are a subset of `transmit.allow_list`.
+
+### Coverage today (DC-24)
+
+What covers each case before `tests/component/` and `tests/replay/` exist. **Level 2** means a session test in `tests/unit/test_session_*.py` (in-process, `DesktopPlatform` and `FakeClock`); **level 1** means a module's unit test. Test names leave out `test_`. **Still needs** is what only replay or the rig can show.
+
+| ID | Level 2 today | Level 1 today | Still needs |
+| --- | --- | --- | --- |
+| COM-01 | `NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed` | `SC_2_read_batch_never_waits_and_keeps_order` | Rig A1 at 250 and 500 kbit/s |
+| COM-02 | `NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed`, `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | `NP_17_nothing_is_sent_before_transmit_is_enabled` | Replay with a witness from power-on; rig A2 |
+| COM-03 | `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | `NP_17_no_bitrate_fault_gives_none_while_active`, `STS_1_light_priority_fast_over_slow_over_steady` | Covered |
+| COM-04 | `NP_4_session_skips_baseline_247_and_246_and_claims_245`, `NP_1_claim_first_then_header_with_the_claim_result_then_requests` | `NP_4_claims_247_first_with_the_logger_name`, `NP_4_skips_inventory_claimed_and_reserved_addresses`, `NP_5_logger_name_is_arbitrary_address_capable_and_maximal`, `NP_6_nothing_but_claims_for_250_ms_after_a_claim` | Replay |
+| COM-05 | `NP_7_contest_at_247_concedes_and_claims_246` (one contest) | `NP_7_concedes_tries_once_more_then_cannot_claim`, `NP_7_after_cannot_claim_answers_requests_with_cannot_claim`, `DET_4_own_claims_are_not_contests` | Replay with `ecu_sim` contesting twice; rig A3 |
+| COM-06 | `NP_8_request_to_the_logger_is_nacked` | `NP_8_answers_request_for_address_claim`, `NP_8_nacks_other_requests_to_the_logger_and_ignores_global_ones` | A session run of the re-claim |
+| COM-07 | `NP_11_session_sweeps_after_claiming_and_every_10_minutes` (35 minutes) | `NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa`, `NP_11_sweep_repeats_every_10_minutes`, `LOG_9_first_sweep_is_logged_then_only_changes` | Covered |
+| COM-08 | `NP_12_vin_reply_gives_vin_check_match`, `NP_14_no_vin_reply_gives_vin_check_unavailable` | `NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa` | Replay with `ecu_sim` at SA 0 |
+| COM-09 | `NP_13_new_device_is_asked_for_its_identity` | `NP_13_known_name_is_not_asked_for_identity`, `NP_14_timeout_retry_once_then_no_reply_and_never_repeated`, `NP_14_reply_value_is_kept_for_identify` | Replay with the three outcomes from `ecu_sim` |
+| COM-10 | `NP_18_send_error_turns_transmit_off_with_a_high_fault`, `NP_18_unexpected_error_in_requests_turns_transmit_off_and_logging_continues`, `NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_continues`, `NP_18_error_inside_transmit_disable_still_keeps_logging`, `NP_16_witness_over_a_busy_minute` | `NP_9_breach_is_never_sent_and_turns_transmit_off`, `NP_16_*`, `NP_18_enobufs_*`, `NP_18_transmit_never_turns_back_on_in_the_session` | Rig A3 |
+| COM-11 | `NP_3_bus_off_turns_transmit_off_for_the_session`, `NP_3_error_passive_from_own_transmit_errors_turns_transmit_off` | `NP_3_bus_state_reads_bus_off_and_tx_error_passive`, `NP_3_bus_off_disable_drops_the_queue` | "Detection continues" after bus-off asserted in a session run; rig A3 with no ACK partner |
+| COM-12 | `NP_15_ecu_nack_to_the_logger_is_not_a_new_pgn` | `NP_15_own_frames_are_ignored`, `NP_15_own_frames_and_replies_to_logger_are_marked`, `NP_15_frames_sent_through_the_handle_come_back_marked_own`, `NP_15_own_frames_and_replies_to_the_logger_are_not_monitored` | Replay with a device replying |
+| COM-13 | `NP_9_rts_to_the_logger_gets_cts` | `DET_19_*` (15 tests), `NP_9_rts_to_the_logger_gets_cts_then_eoma`, `NP_9_oversize_rts_to_logger_gets_connection_abort`, `NP_9_transfers_between_other_nodes_get_no_replies` | Replay |
+| COM-14 | `NP_19_restart_loop_starts_listen_only_with_a_high_fault` | None | Replay killing the service 3 times |
+| COM-15 | None | None | Rig A3 only |
+| COM-16 | None | None | Rig A4 only |
+| COM-17 | `NP_8_session_ignores_a_commanded_address_to_its_name` (BAM from 249, checked to reach `address`) | `NP_8_commanded_address_to_the_logger_is_ignored` | Replay |
+
 
 ## 6. Detection and identification tests
 

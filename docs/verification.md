@@ -30,14 +30,14 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | SC-12a | T | 1 | `test_SC_12a_*` (tests/malformed), `test_SC_12a_monitor_never_raises_and_stays_within_the_limits` | vcan | pass on vcan: decode and monitor under Hypothesis | 2026-11-14 | CI, PR step-4-monitor |
 | NP-1 | T | 3 | `test_NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `test_NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s` | vcan | pass on vcan: listen-only until the bit rate is confirmed; nothing sent before; A1, A2 on hardware (step 8) | 2026-11-14 | CI, PR step-3-session |
 | NP-2 | T | 3 | `test_NP_2_channel_switches_to_normal_mode_after_the_bit_rate_is_confirmed` | vcan | pass on vcan: normal mode after confirmation; A2 on hardware | 2026-11-14 | CI, PR step-3-session |
-| NP-3 | T | 3 | `test_NP_3_*`, `test_NP_3_bus_off_turns_transmit_off_for_the_session` | vcan | pass on vcan: bus-off turns transmit off for the session, fault logged, bus_off in session_end | 2026-11-14 | CI, PR step-3-session |
-| NP-4 | T | 3 | `test_NP_4_*`, `test_NP_7_contest_at_247_concedes_and_claims_246` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
+| NP-3 | T | 3 | `test_NP_3_*`, `test_NP_3_bus_off_turns_transmit_off_for_the_session`, `test_NP_3_error_passive_from_own_transmit_errors_turns_transmit_off` | vcan | pass on vcan: bus-off turns transmit off for the session, fault logged, bus_off in session_end | 2026-11-14 | CI, PR step-3-session |
+| NP-4 | T | 3 | `test_NP_4_*`, `test_NP_7_contest_at_247_concedes_and_claims_246`, `test_NP_4_session_skips_baseline_247_and_246_and_claims_245` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
 | NP-5 | I, T | 3 | `test_NP_5_logger_name_is_arbitrary_address_capable_and_maximal` | vcan | pass: the configured NAME is arbitrary-address-capable, on-highway, every other field at maximum | 2026-11-14 | CI, PR step-3-address-requests |
 | NP-6 | T | 3 | `test_NP_6_nothing_but_claims_for_250_ms_after_a_claim`, `test_NP_1_claim_first_then_header_with_the_claim_result_then_requests` | vcan | pass on vcan: no other traffic for 250 ms after the claim | 2026-11-14 | CI, PR step-3-session |
 | NP-7 | T | 3 | `test_NP_7_*`, `test_NP_7_contest_at_247_concedes_and_claims_246` | vcan | pass on vcan: concedes and claims the next address; A3 on hardware | 2026-11-14 | CI, PR step-3-session |
-| NP-8 | T | 3 | `test_NP_8_*`, `test_NP_8_request_to_the_logger_is_nacked` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
+| NP-8 | T | 3 | `test_NP_8_*`, `test_NP_8_request_to_the_logger_is_nacked`, `test_NP_8_session_ignores_a_commanded_address_to_its_name` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
 | NP-9 | T | 3 | `test_NP_9_oversize_rts_to_logger_gets_connection_abort`, `test_NP_9_*`, `test_NP_9_never_requests_outside_the_request_allow_list`, `test_NP_9_rts_to_the_logger_gets_cts`, `test_NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap` | vcan | pass on vcan: the witness sees only allow-listed frames; A3 on hardware | 2026-11-14 | CI, PR step-3-session |
-| NP-11 | T | 3 | `test_NP_11_*`, `test_NP_1_claim_first_then_header_with_the_claim_result_then_requests` | vcan | pass on vcan: sweep after claiming and every 10 minutes | 2026-11-14 | CI, PR step-3-session |
+| NP-11 | T | 3 | `test_NP_11_*`, `test_NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `test_NP_11_session_sweeps_after_claiming_and_every_10_minutes` | vcan | pass on vcan: sweep after claiming and every 10 minutes | 2026-11-14 | CI, PR step-3-session |
 | NP-12 | T | 3 | `test_NP_11_session_start_sweeps_then_asks_time_date_and_vin_of_vin_sa`, `test_NP_12_vin_reply_gives_vin_check_match` | vcan | pass on vcan: Time/Date and VIN to requests.vin_sa; vin_check record (DC-12) | 2026-11-14 | CI, PR step-3-session |
 | NP-13 | T | 3 | `test_NP_13_known_name_is_not_asked_for_identity`, `test_NP_13_new_device_is_asked_for_its_identity` | vcan | pass on vcan | 2026-11-14 | CI, PR step-3-session |
 | NP-14 | T | 3 | `test_NP_14_*`, `test_NP_14_no_vin_reply_gives_vin_check_unavailable` | vcan | no reply recorded in the session | 2026-11-14 | CI, PR step-3-session |
@@ -89,7 +89,7 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | LOG-2 | T | 2 | `test_LOG_2_roll_over_continues_rec_and_chain_in_part_2`, `test_LOG_2_parts_are_checked_in_order_with_continuing_record_numbers` | vcan | pass: roll-over ends the part with session_end, the next part starts with session_start, rec and the chain continue (DC-10, DC-11); verifier checks parts in order | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-3 | I, T | 2 | `test_LOG_3_*`, `test_LOG_3_sync_thread_syncs_every_interval` | vcan | partial: one write() per record, O_APPEND, sync_now(); periodic sync thread in step 2; periodic sync thread | 2026-11-13 | CI, PR step-2-session |
 | LOG-4 | I | 1 | `test_LOG_4_*` | vcan | partial: common fields, key order and time formats written by eventlog; veh_time and elapsed-mode utc in step 2 | 2026-11-13 | CI, PR step-1-logic |
-| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card`, `test_LOG_5_new_card_is_a_declared_break_not_a_failure` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions; verifier reports a new card as a declared break | 2026-11-13 | CI, PR step-2-verify-demo |
+| LOG-5 | T | 1 | `test_LOG_5_*`, `test_LOG_5_state_json_is_on_internal_flash_not_the_card`, `test_LOG_5_state_unwritable_hits_state_json_only`, `test_LOG_5_state_json_written_at_start_and_end`, `test_LOG_5_numbering_uses_the_higher_of_state_json_and_the_card`, `test_LOG_5_blank_card_with_state_file_is_a_new_card`, `test_LOG_5_corrupt_state_with_sessions_continues_from_the_card`, `test_LOG_5_new_card_is_a_declared_break_not_a_failure`, `test_LOG_5_incomplete_last_line_is_never_rewritten` | vcan | partial: hash rule (every session 142 hash reproduced) and chain within a file; chain across sessions and state.json in step 2; store keeps state.json on flash; numbering, new card, corrupt state, chain across sessions; verifier reports a new card as a declared break | 2026-11-13 | CI, PR step-2-verify-demo |
 | LOG-6 | I | 2 | `test_LOG_6_session_start_header_has_every_field` | vcan | partial: every header field present; VIN, address and restart guard are placeholders until step 3 (DC-11) | 2026-11-13 | CI, PR step-2-session |
 | LOG-7 | T | 4 | `test_LOG_7_connection_records_for_new_devices_and_none_for_baseline_ecus` | vcan | partial: connection records for new and approved devices, none for baseline ECUs, with identification results; raw captures in step 6 | 2026-11-14 | CI, PR step-5-session |
 | LOG-8 | I | 7 | `test_LOG_8_login_and_logout_are_logged_with_the_operator` | vcan | partial: operator records written with operator and time; inspection in step 9 | 2026-11-14 | CI, PR step-7-status |
@@ -165,3 +165,90 @@ A CI check (`tools/check_verification.py`, staged by DC-2) fails if a requiremen
 | PLT-6 | I, D | 2a / 8 |  |  |  |  |  |
 | PLT-7 | A | 8 |  |  |  |  |  |
 | PLT-8 | I, T | 8 |  |  |  |  |  |
+
+**Test levels (DC-24):** the session tests in `tests/unit/test_session_*.py` count as level 2 (component) evidence until `tests/component/` exists; no row claims level 3 (replay) beyond the two `vcan0` tests. Coverage of each communications case is in `docs/test-plan.md` §5.
+
+## Per-clause tests for safety-critical requirements
+
+The safety-critical rows (transmit and its limits: NP-1, NP-3, NP-9, NP-16 to NP-19; hashing: LOG-5 and LOG-14) are split here into their clauses, each with the tests that assert it, so a reviewer can check every clause without reading every test. Test names leave out the `test_` prefix; all are in `tests/unit/` unless noted. Clauses that need hardware say so. Keep this section current with the matrix above.
+
+### NP-1: listen-only first, bit rate confirmed before transmitting
+| Clause | Tests |
+| --- | --- |
+| Starts listen-only; nothing is sent before the bit rate is confirmed | `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s`, `NP_17_nothing_is_sent_before_transmit_is_enabled` |
+| Confirms 250 or 500 kbit/s from clean frames, then claims first | `NP_1_claim_first_then_header_with_the_claim_result_then_requests`, `SC_2_read_batch_never_waits_and_keeps_order` |
+| Listen-only mode on the real controller | Hardware: A1 (step 8) |
+
+### NP-3: bus-off or own error-passive turns transmit off for the session
+| Clause | Tests |
+| --- | --- |
+| Bus-off and transmit error-passive are recognised; receive-only error-passive is not the logger's | `NP_3_bus_state_reads_bus_off_and_tx_error_passive` |
+| Bus-off: stop transmitting, log a fault, `bus_off` in the session end | `NP_3_bus_off_turns_transmit_off_for_the_session`, `NP_3_bus_off_disable_drops_the_queue` |
+| Own error-passive: stop transmitting, log a fault; receive-only error-passive keeps transmit on | `NP_3_error_passive_from_own_transmit_errors_turns_transmit_off` |
+| Stays listen-only for the rest of the session | `NP_18_transmit_never_turns_back_on_in_the_session` |
+
+### NP-9: only allowed frames, no data, no writes
+| Clause | Tests |
+| --- | --- |
+| Only PGNs on `transmit.allow_list`, with the right identifiers | `NP_9_allowed_frames_are_sent_with_the_right_identifiers`, `NP_9_breach_is_never_sent_and_turns_transmit_off` (12 cases) |
+| Config can narrow the allow-lists but never widen them | `NP_9_configured_allow_list_can_narrow_but_never_widen` |
+| Requests only for `requests.allow_list` PGNs | `NP_9_never_requests_outside_the_request_allow_list` |
+| Transport-protocol handshake only for transfers addressed to it (CTS, EOMA, Connection Abort) | `NP_9_rts_to_the_logger_gets_cts_then_eoma`, `NP_9_logger_asks_for_each_window_when_rts_limits_packets_per_cts`, `NP_9_oversize_rts_to_logger_gets_connection_abort`, `NP_9_transfers_between_other_nodes_get_no_replies`, `NP_9_rts_to_the_logger_gets_cts` |
+| Only Cannot Claim uses the null address | `NP_9_only_cannot_claim_may_use_the_null_address` |
+| Only `transmit` sends; only `session` hands it the send handle (rule 4) | `tests/contract/test_imports.py::NP_9_only_transmit_sends_and_only_session_hands_it_the_send_handle` |
+| A witness on the bus sees only allowed frames | `NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap` (vcan, CI); on hardware, the witness Beacon (step 8) |
+
+### NP-16: at most 10 frames/s, one outstanding request per destination, protocol frames first
+| Clause | Tests |
+| --- | --- |
+| At most 10 frames in any second | `NP_16_30_queued_requests_never_exceed_10_frames_in_any_second`, `NP_16_witness_over_a_busy_minute` |
+| One outstanding request per destination; global requests count as destination 255 | `NP_16_one_outstanding_request_per_destination_until_release`, `NP_16_global_requests_count_as_destination_255` |
+| Address-claim replies and NACKs go ahead of queued requests | `NP_16_protocol_frames_go_ahead_of_queued_requests` |
+| Config can lower the limits but never raise them; zero or negative is refused | `NP_16_config_cannot_raise_the_rate_cap`, `NP_16_config_rejects_zero_or_negative_rate_limits`, `NP_16_transmit_clamps_to_the_release_cap` |
+
+### NP-17: no bit rate, stay listen-only and keep trying
+| Clause | Tests |
+| --- | --- |
+| Never transmits before a bit rate is confirmed | `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s`, `NP_17_nothing_is_sent_before_transmit_is_enabled` |
+| Keeps trying; a fault after 60 s | `NP_17_nothing_is_sent_without_a_confirmed_bit_rate_and_fault_after_60_s`, `NP_17_no_bitrate_fault_gives_none_while_active` |
+| Shows the fault state | A high fault sets the light: `STS_1_light_priority_fast_over_slow_over_steady`, `STS_1_status_sets_the_light_on_change_and_writes_on_state_change` |
+| Interface missing or down: retried with backoff, logged once, session kept | `NP_17_missing_interface_is_retried_with_backoff_and_logged_once`, `NP_17_interface_down_while_running_keeps_the_session_and_retries`, `NP_17_missing_interface_raises_can_missing_on_start`, `NP_17_interface_down_raises_can_down_from_read_batch`, `NP_17_can_down_fault_plan_reaches_read_batch`, `NP_17_send_handle_without_a_socket_raises_can_down`, `NP_17_missing_interface_raises_can_missing`, `NP_17_can_missing_fault_raises_platform_error` |
+
+### NP-18: any unexpected error or breach turns transmit off for the session
+| Clause | Tests |
+| --- | --- |
+| A frame that would break the allow-list or rate cap is never sent; transmit off; high fault | `NP_9_breach_is_never_sent_and_turns_transmit_off` (12 cases) |
+| A send error (ENOBUFS) turns transmit off with a high fault | `NP_18_send_error_turns_transmit_off_with_a_high_fault`, `NP_18_enobufs_on_send_turns_transmit_off`, `NP_18_enobufs_from_the_fault_plan_turns_transmit_off` |
+| An unexpected error in the request or address code turns transmit off; logging continues | `NP_18_unexpected_error_in_requests_turns_transmit_off_and_logging_continues`, `NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_continues` |
+| An error while turning transmit off still leaves it off, with the fault, and logging continues | `NP_18_error_inside_transmit_disable_still_keeps_logging` |
+| Never turns back on in the session | `NP_18_transmit_never_turns_back_on_in_the_session` |
+
+### NP-19: a restart loop starts listen-only
+| Clause | Tests |
+| --- | --- |
+| (a) The service unit waits between restarts and caps them | Inspection of the service unit; on hardware in step 8 |
+| (b) After 3 unclean restarts in 10 minutes, the next session is listen-only: no claim, sweep or requests | `NP_19_restart_loop_starts_listen_only_with_a_high_fault` |
+| (c) High fault "restart loop; transmit disabled"; detection continues | `NP_19_restart_loop_starts_listen_only_with_a_high_fault`; light: `STS_1_light_priority_fast_over_slow_over_steady` |
+
+### LOG-5: SHA-256 hash chain
+| Clause | Tests |
+| --- | --- |
+| The hash rule (prev as hex, then compact JSON in written order) | `LOG_5_hash_rule_reproduces_every_session_142_hash`, `LOG_5_example_session_142_hash_chain_verifies`, `LOG_14_verifier_hash_matches_the_logger` |
+| Chained within a session | `LOG_5_appended_records_form_a_chain_from_prev` |
+| Across sessions and parts: the first record carries the last hash before it | `LOG_14_two_sessions_verify_as_one_chain`, `LOG_2_roll_over_continues_rec_and_chain_in_part_2`, `LOG_5_example_retrieval_last_hash_is_the_chain_before_it` |
+| After a power loss: the hash of the last complete record; the incomplete last line is never rewritten | `LOG_12_power_loss_reports_bytes_cut_off_and_chain_continues`, `LOG_5_incomplete_last_line_is_never_rewritten`, `LOG_5_crash_before_the_header_continues_the_chain_from_the_older_file` |
+| New logger: prev of 64 zeros | `LOG_5_SN_d2_corrupt_state_with_a_blank_card_starts_session_1` |
+| New card: 64 zeros, `new_card`, a declared break | `LOG_5_blank_card_with_state_file_is_a_new_card`, `LOG_5_new_card_is_a_declared_break_not_a_failure` |
+| `state.json` on internal flash, written at session start and after each part | `LOG_5_state_json_is_on_internal_flash_not_the_card`, `LOG_5_state_json_written_at_start_and_end`, `LOG_5_state_unwritable_hits_state_json_only`, `LOG_5_state_unwritable_fault_hits_flash_only` |
+| Next session number is one more than the higher of state and card | `LOG_5_numbering_uses_the_higher_of_state_json_and_the_card` |
+| Missing or corrupt state with sessions on the card: numbering and chain continue | `LOG_5_SN_b_state_missing_with_sessions_continues_numbering_and_chain`, `LOG_5_corrupt_state_with_sessions_continues_from_the_card` |
+| Flash not writable: `install.sh` asks for the next session number | Hardware: step 2a check and step 8 |
+
+### LOG-14: chain verifier
+| Clause | Tests |
+| --- | --- |
+| Verifies a set of session files as one chain | `LOG_14_session_142_example_verifies`, `LOG_14_two_sessions_verify_as_one_chain`, `LOG_2_parts_are_checked_in_order_with_continuing_record_numbers` |
+| Reports the first broken or missing record | `LOG_14_changed_record_is_named`, `LOG_14_deleted_record_is_named_as_missing`, `LOG_14_deleted_session_file_breaks_the_chain` |
+| An incomplete last line is truncated, not broken | `LOG_14_truncated_last_line_is_reported_not_broken` |
+| Continues from the laptop's last hash | `LOG_14_laptop_last_hash_must_be_continued` |
+| Command line: exit codes and JSON | `LOG_14_cli_exit_codes_and_json` |

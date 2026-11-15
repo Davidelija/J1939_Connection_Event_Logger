@@ -77,8 +77,17 @@ def settings() -> dict[str, Any]:
     return settings_from_config(json.loads((EXAMPLES / "cfg-v3.json").read_text("utf-8")))
 
 
-def inventory() -> Inventory:
-    return inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
+def inventory(extra_addresses: Sequence[int] = ()) -> Inventory:
+    """The example inventory, plus one vehicle ECU at each of ``extra_addresses``."""
+    data = json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8"))
+    for i, sa in enumerate(extra_addresses):
+        e = json.loads(json.dumps(data["entries"][0]))
+        e["entry"] = f"E{90 + i}"
+        e["name"] = f"0x{ENGINE + 0x100 + i:016X}"
+        e["name_fields"]["identity"] = f"0x{(ENGINE + 0x100 + i) & 0x1FFFFF:X}"
+        e["addresses"] = [sa]
+        data["entries"].append(e)
+    return inventory_from_file(data)
 
 
 def make(
@@ -86,12 +95,13 @@ def make(
     rate: Optional[int] = 250000,
     plan: Sequence[FaultSpec] = (),
     fc: Optional[FakeClock] = None,
+    inv: Optional[Inventory] = None,
 ) -> tuple[Session, FakeClock, list[tuple[float, int, bytes]]]:
     fc = fc or FakeClock(start_utc=START, start_mono=100.0)
     sent: list[tuple[float, int, bytes]] = []
     p = Bus(sent, rate, fault_plan=plan, clock=fc, root=root)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
-    s = Session(p, settings(), inventory(), versions, None)
+    s = Session(p, settings(), inv or inventory(), versions, None)
     return s, fc, sent
 
 
@@ -254,6 +264,23 @@ def test_NP_3_bus_off_turns_transmit_off_for_the_session(tmp_path: Path) -> None
     r = records(tmp_path)
     assert any(x["type"] == "fault" and "bus_off" in x["cause"] for x in r)
     assert r[-1]["bus_off"] is True
+
+
+def test_NP_3_error_passive_from_own_transmit_errors_turns_transmit_off(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    s.capture._ingest(frame(0x04, bytes([0, 0x01, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    run(s, fc, 2.0)  # error-passive on receive only: not our transmit errors, keep going
+    assert s.status_state().transmit == "on"
+    before = len(sent)
+    s.capture._ingest(frame(0x04, bytes([0, 0x20, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    run(s, fc, 5.0)
+    assert s.status_state().transmit == "off: error_passive"
+    stop(s)
+    assert len(sent) == before  # nothing more sent this session
+    r = records(tmp_path)
+    assert any(x["type"] == "fault" and "error_passive" in x["cause"] for x in r)
 
 
 def test_NP_7_contest_at_247_concedes_and_claims_246(tmp_path: Path) -> None:
@@ -473,3 +500,61 @@ def test_NP_18_error_inside_transmit_disable_still_keeps_logging(tmp_path: Path)
     assert recs[-1]["type"] == "session_end"
     diag = (tmp_path / "card" / "diag" / "logger.log").read_text("utf-8")
     assert "transmit.disable" in diag and "RuntimeError: probe" in diag
+
+
+def _claims(sent: list[tuple[float, int, bytes]]) -> list[int]:
+    return [cid & 0xFF for _, cid, _ in sent if pgn_of(cid) == 60928]
+
+
+def test_NP_4_session_skips_baseline_247_and_246_and_claims_245(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path, inv=inventory(extra_addresses=(247, 246)))
+    s.start()
+    run(s, fc, 2.0)
+    stop(s)
+    assert _claims(sent)[0] == 245
+    t_claim = sent[0][0]
+    assert all(pgn_of(cid) == 60928 for t, cid, _ in sent if t < t_claim + 0.25)  # NP-6
+    header = records(tmp_path)[0]
+    assert (header["type"], header["logger_sa"]) == ("session_start", 245)
+    assert sent[0][2] == NAME.to_bytes(8, "little")  # the NP-5 NAME
+
+
+def test_NP_11_session_sweeps_after_claiming_and_every_10_minutes(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 35 * 60.0, step=0.5)
+    stop(s)
+    claim_req = (60928).to_bytes(3, "little")  # Request for Address Claim, sent global
+    sweeps = [
+        t for t, cid, data in sent
+        if pgn_of(cid) == 59904 and (cid >> 8) & 0xFF == 0xFF and data[:3] == claim_req
+    ]  # fmt: skip
+    assert len(sweeps) == 4  # after claiming, then at 10, 20 and 30 minutes
+    assert sweeps[0] - sent[0][0] < 2.0
+    gaps = [b - a for a, b in zip(sweeps, sweeps[1:])]
+    assert all(abs(g - 600.0) <= 1.0 for g in gaps), gaps
+
+
+def test_NP_8_session_ignores_a_commanded_address_to_its_name(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    assert _claims(sent) == [247] and s.address is not None
+    seen: list[bytes] = []
+    deliver = s.address.on_message
+
+    def spy(m: Any, *a: Any, **k: Any) -> Any:
+        if m.pgn == 65240:
+            seen.append(m.data)
+        return deliver(m, *a, **k)
+
+    s.address.on_message = spy  # type: ignore[method-assign,assignment]
+    for f in bam_frames(249, 65240, NAME.to_bytes(8, "little") + bytes([200]), fc.mono()):
+        s.capture._ingest(f)
+        run(s, fc, 0.05)
+    run(s, fc, 3.0)
+    assert seen == [NAME.to_bytes(8, "little") + bytes([200])]  # the command did arrive
+    assert s.status_state().logger_sa == 247
+    stop(s)
+    assert 200 not in _claims(sent)  # never claims the commanded address
+    assert all(cid & 0xFF == 247 for _, cid, _ in sent)  # every frame still from 247
