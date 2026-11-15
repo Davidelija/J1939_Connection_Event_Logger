@@ -24,9 +24,14 @@ The logger sits on a short tap at a heavy truck's 9-pin J1939 diagnostic connect
 
 *(The rest of this chapter is written as each build step lands.)*
 
-- What you need *(step 7)*
-- What you need *(step 7)*
+- What you need *(below)*
 - Running the no-hardware demo *(below)*
+
+### What you need
+
+- **A Windows laptop** with Python 3.9 or later and the Windows OpenSSH client (Settings, Apps, Optional features, OpenSSH Client). Nothing else is installed on the laptop. Until the release bundle exists (steps 8 and 9), run the tool from a copy of the repository: `python -m j1939ctl <command>` with the repository's `src` folder on `PYTHONPATH`. This manual writes it as `j1939ctl <command>`.
+- **Your operator key:** an Ed25519 SSH key with a passphrase, one per person. An admin installs its public key on the logger (with `release/keys.sh`, step 8); the logger lists every installed key's fingerprint in each session header, and records the key you used with every change you make.
+- **A wired connection:** an Ethernet cable, or a USB-Ethernet adapter, to the logger's wired port.
 
 ### Running the no-hardware demo
 
@@ -58,16 +63,59 @@ demo passed: the scan tool's claim gave a chained connection_start
 | `modprobe: FATAL: Module vcan not found` | Install the extra kernel modules for your kernel (`sudo apt-get install linux-modules-extra-$(uname -r)`), then run the demo again. |
 | `canplayer not found: install can-utils` | `sudo apt-get install can-utils`. |
 | `logger did not start` | The logger's own messages are printed above this line; a config error names the key at fault. |
-- Setting up the Windows laptop and connecting it: the logger's fixed address (`network.address`) and its DHCP server on the wired port *(step 7)*
+### Connecting the laptop
+
+1. Plug the cable into the logger's wired port and the laptop. The logger runs a DHCP server on that port only, so the laptop gets an address of the form 192.168.250.x by itself.
+2. Run `j1939ctl status`. The tool reaches the logger at its fixed address, 192.168.250.1 (`network.address`); give `--host` if your logger was set up with another one.
+3. The first time, OpenSSH asks you to accept the logger's host key, and asks for your key's passphrase.
+
+If it cannot connect, the message names the address it tried; check the cable and that the laptop has a 192.168.250.x address (troubleshooting table, "Laptop").
+
 - Installing the logger, including the VIN request address `requests.vin_sa` (default 0, the engine) *(step 8)*
 
 ## 2. Everyday use
-- The status light and the `status` screen *(steps 7, 8)*
-- Training a truck; PTO is detected from Power Takeoff Information 1 (PGN 65264, engaged when Power Takeoff Speed is above zero) or declared by the operator *(step 6)*
+### The status light and the `status` screen
+
+The logger has one light. When more than one applies, fast blink wins over slow blink, and slow blink over steady.
+
+| Light | Meaning | What to do |
+| --- | --- | --- |
+| Off | Starting, or finding the bus's bit rate | Wait; if it stays off with the key on, run `status`. |
+| Steady | Recording, all good | Nothing. |
+| Slow blink | Needs attention: high events to review, needs training, training running, or the card is nearly full | Run `status`; its Next step line says which. |
+| Fast blink | A fault: a high fault, a VIN mismatch, transmit turned off, or a restart loop | Run `status`, then the troubleshooting table. |
+
+`j1939ctl status` shows the state and light, VIN, session, the number of events to review, whether training is needed, card use, the logger's clock and its difference from the laptop's, the versions in use, and a **Next step** line. It works when the logger service is down, from the last saved status. (On the Beacon, which LED shows the light is set in step 8.)
+
+### Training a truck
+
+Training teaches the logger which devices belong on this truck.
+
+1. Run `j1939ctl train start`. The light slow-blinks while training runs.
+2. Drive through every condition: key on with the engine off, engine idling, driving, and PTO if the truck has one. The logger takes the condition from engine speed, vehicle speed and Power Takeoff Information 1 (PGN 65264, engaged when Power Takeoff Speed is above zero).
+3. Run `j1939ctl train status` at any time: it shows the time used and left, the conditions covered and still to cover, and the devices found with how many PGNs each sends.
+4. Run `j1939ctl train finish`, adding `--pto` if PTO was used but the truck does not report it. The tool lists the proposed inventory by entry ID (for example E07), with each device's NAME, address, make, category, PGNs sent and requests made, and asks "Apply this inventory? y/N". Only y applies it; it takes effect from the next session.
+
+Training stops by itself after 120 minutes (`training.timeout_min`); the proposal then waits for `train finish`.
+
 - Reviewing new events: run `events`, then `approve` a device you know or `clear` it with the repair-order number; the slow blink stops when every high event is cleared.
-- Changing the inventory *(step 6)*
+### Changing the inventory
+
+- **Add a device or a PGN that turned up later:** `j1939ctl approve <event-id>` (for example `approve 142-37`). It approves the logged device, a new PGN (with a warning line if it is a control PGN) or a moved address, and clears that event.
+- **Remove a device, or one PGN of it:** `j1939ctl remove <entry-id>`, or `remove E07 --pgn 61444 --direction sent` (or `requested`). Removing an ECU found in training prints a warning line.
+- Each change shows what will change, asks for a reason and asks y/N; it saves a new inventory version that applies from the next session. Old versions are kept. `j1939ctl inventory show` shows the current one; `inventory export --out FILE` writes it as CSV.
+
 - Retrieving logs and running the report: `retrieve`, then `report logs/<VIN>`; the chain check result and the latest chain hash are in section 5.
-- Reading the report *(step 7)*
+### Reading the report
+
+`j1939ctl report logs/<VIN>` shows a plain-text report and saves it beside the retrieved folder (which is read-only) as `logs/report-<VIN>-<date and time>.txt`, with the events as `logs/events-<VIN>.csv`. It works offline. Its five sections, in order:
+
+1. **Events to review:** high events not yet cleared, by event ID.
+2. **New devices:** each new connection by event ID, with its address, NAME, category, and the type and make identification found (or unknown).
+3. **Changes since the last retrieval:** inventory and config changes, each with operator and reason, for the reviewer's sign-off; changes that weaken detection are marked.
+4. **Sessions and gaps:** each session with its counter and its software, config and inventory versions, and any gaps between sessions.
+5. **Chain check:** the result of checking the hash chain, and the latest chain hash.
+
 - Changing a setting: edit a copy of the config with a new version number, then `config push <file>`; it applies from the next session.
 
 ## 3. Less common tasks
@@ -84,9 +132,9 @@ The card is formatted ext4. On it:
 | Folder or file | What it holds |
 | --- | --- |
 | `sessions/` | One event file per session: `s000142_20261106T140211Z.jsonl` (session number and UTC start). A session longer than 24 hours continues in parts (`…_p2.jsonl`). A session started with no valid clock is named `…_noclock.jsonl`. |
-| `raw/` | Raw CAN frames around each new connection, in candump format *(from step 6)*. |
+| `raw/` | Raw CAN frames around each new connection, in candump format. |
 | `inventory/`, `config/`, `library/` | One file per version of the inventory, config and device library (`inv-v2.json`, `cfg-v3.json`, `lib-v1.json`). Old versions are kept. |
-| `status.json` | The logger's current state *(from step 7)*. |
+| `status.json` | The logger's current state. |
 | `diag/logger.log` | The diagnostic log: errors and restart causes. It is not evidence and not hash-chained. |
 
 The logger's internal flash (not the card) holds `state.json`: the last session number and last hash, so numbering continues when the card is replaced.
@@ -116,12 +164,15 @@ The last line says `chain verifies` (exit code 0) or `chain BROKEN` (exit code 1
 
 **If the chain check fails:** do not edit or delete the files. Keep the retrieved folder read-only and make a copy for analysis. Note the first broken record (file and line), and compare the chain with the last hash the laptop kept from the previous retrieval: anything before that hash was already verified. Report it with the logger's VIN and the session numbers to the escalation contact *(to be agreed with ORNL)*.
 
-- Opening raw captures *(step 6)*
+### Opening raw captures
+
+For each new connection and each control-flag event, the logger saves the raw CAN frames from 10 s before to 60 s after it in `raw/`, named by session, connection and event number (for example `s000142_c2_e1.log`). The connection record names its capture. The files are in `candump` log format: plain text, one frame per line, with a timestamp, the interface and `ID#DATA`. Open them in a text editor, replay them on a Linux machine with `canplayer -I <file>`, or convert them with can-utils' `log2asc` for other CAN tools. Old captures are deleted first when the card fills: retrieved ones first, then unretrieved ones, oldest first.
+
 
 ## 5. Admin
 - Logging in, file locations, starting and stopping the service, the diagnostic log *(step 8)*
 - Installing, updating and rolling back from the release bundle *(steps 8, 9)*
-- Adding and removing operator keys *(step 7)*
+- Adding and removing operator keys: an admin runs `release/keys.sh` on the logger, which installs the public key and keeps a fingerprint-to-name file *(step 8)*. Each session header lists the fingerprints of all installed operator keys.
 - Updating the device library: characterize the device on the bench, add an entry to `data/device_library.json` (function codes, typical and never-used PGNs, optional make and model), raise the library version, install it with the release, then rerun the identification tests and record the new library version in the findings report's setup section. The repo source `data/device_library.json` is installed on the logger as `library/lib-vN.json`; raising the library version means changing the `library` field (`lib-v1` → `lib-v2`); the format stays `lib-1`. *(step 5)*
 - The hardening checklist and the Beacon procedure *(step 8)*
 - Deleting data by hand *(step 8)*

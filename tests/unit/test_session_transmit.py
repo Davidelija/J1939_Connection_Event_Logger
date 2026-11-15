@@ -256,6 +256,23 @@ def test_NP_3_bus_off_turns_transmit_off_for_the_session(tmp_path: Path) -> None
     assert r[-1]["bus_off"] is True
 
 
+def test_NP_3_error_passive_from_own_transmit_errors_turns_transmit_off(tmp_path: Path) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    s.capture._ingest(frame(0x04, bytes([0, 0x01, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    run(s, fc, 2.0)  # error-passive on receive only: not our transmit errors, keep going
+    assert s.status_state().transmit == "on"
+    before = len(sent)
+    s.capture._ingest(frame(0x04, bytes([0, 0x20, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    run(s, fc, 5.0)
+    assert s.status_state().transmit == "off: error_passive"
+    stop(s)
+    assert len(sent) == before  # nothing more sent this session
+    r = records(tmp_path)
+    assert any(x["type"] == "fault" and "error_passive" in x["cause"] for x in r)
+
+
 def test_NP_7_contest_at_247_concedes_and_claims_246(tmp_path: Path) -> None:
     s, fc, sent = make(tmp_path)
     s.start()

@@ -31,6 +31,25 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-new-20261114-rate-cap — The rate limits are config parameters that can lower the release cap but never raise it  (proposed, 2026-11-14)
+- **Raised by:** Claude Code, branch `docs-qc-2` (QC report, after the QC-1 fixes in PR #30)
+- **Decided by:**
+- **Change:** Wording only; the code already does this (QC-1, PR #30). NP-16's last sentence, "Both limits are config parameters.", becomes "Both limits are config parameters that may lower, but never raise, the release values of 10 frames per second and one outstanding request per destination; a config that asks for more, zero or a negative value is refused." The `transmit` contract's rate-cap rule (`docs/modules.md`) names the release values (`RELEASE_MAX_FPS` 10, `RELEASE_MAX_OUTSTANDING` 1 in `transmit.py`), says `config.validate` refuses a higher, zero or negative value and that `Transmit` clamps to the release value. The config table in `docs/requirements.md` notes "maximum; can only be lowered" against `transmit.max_frames_per_s` and `transmit.max_outstanding_per_dest`.
+- **Why:** The requirement and the contract still read as if a config could set any rate, which disagrees with CLAUDE.md rule 4 ("never raise the rate cap") and with the code since QC-1. The specs should say what the code does.
+- **Affects:** NP-16 (text only); `transmit` and `config` contracts (wording; no change to inputs, outputs, errors or keys, so no version change); config keys `transmit.max_frames_per_s` and `transmit.max_outstanding_per_dest` (description only).
+- **Docs updated in the same change (once accepted):** `docs/requirements.md` (NP-16 and the config table), `docs/modules.md` (`transmit` and `config`), `docs/user-manual.md` (config reference, if it lists these keys), `CHANGELOG.md`.
+- **Tests:** none new; already `test_NP_16_config_cannot_raise_the_rate_cap`, `test_NP_16_config_rejects_zero_or_negative_rate_limits`, `test_NP_16_transmit_clamps_to_the_release_cap`.
+
+## DC-new-20261114-test-levels — Question: the in-process session tests count as level 2 until `tests/component/` exists  (proposed, 2026-11-14)
+- **Raised by:** Claude Code, branch `docs-qc-2` (QC report: the component and replay test levels are empty)
+- **Decided by:**
+- **Change:** Proposed: until the test-script writers add `tests/component/` and `tests/replay/` (`docs/test-plan.md` §2, DC-4), the session tests in `tests/unit/test_session_*.py` are recorded as the level 2 (component) evidence. They already run as the test plan defines level 2: `session` in-process with `DesktopPlatform(fault_plan)` and `FakeClock`. `docs/test-plan.md` §2 gets a note saying so, and each COM case in §5 names the session tests that cover it today, or "not covered" where none does. Level 3 (replay, `canplayer` on `vcan0` with `ecu_sim` and the witness) is **not** claimed as covered: the two vcan tests (`test_NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap`, `test_SC_2_...`) are listed as partial. The developer does not write in `tests/component/` or `tests/replay/` (DC-4); those stay with the test-script writers, and this note is removed when they land.
+- **Alternative:** leave levels 2 and 3 empty and mark every COM case "waiting for the test-script writers".
+- **Why:** The test plan names four levels; levels 2 and 3 have no folders yet, so the QC report reads them as missing. Much of level 2 is in fact exercised, but under `tests/unit/`, which the plan does not say.
+- **Affects:** `docs/test-plan.md` §2 and §5 (the COM table's coverage), `docs/verification.md` (Evidence column notes). No requirement, contract or format change.
+- **Docs updated in the same change (once accepted):** `docs/test-plan.md`, `docs/verification.md`, `CHANGELOG.md`.
+- **Tests:** none new.
+
 ## DC-22 — The troubleshooting table is generated from docs/errors.md, with an Operator column  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `docs-troubleshooting` (CLAUDE.md rule 11)
 - **Decided by:** Vaughan Lynn, 2026-11-14 (generator, markers and CI check accepted, and the Operator column chosen, in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
