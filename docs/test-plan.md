@@ -121,7 +121,7 @@ Written against the contract frozen for the build step (`docs/modules.md` §6). 
 
 **Contract tests (`tests/contract/`):** mypy checks each implementation against its `Protocol`; one test per module imports only the public names in `docs/modules.md` §4; the import-linter rule checks the layers. Added with each module's freeze.
 
-**Malformed input (`tests/malformed/`, SC-12a):** Hypothesis starts with `decode` in **step 1** (bad lengths, out-of-order and duplicate TP.DT, RTS over 1785 bytes, aborts, ETP fragments, bad and all-zero NAMEs) and adds `monitor` in step 4 (floods of new addresses and PGNs). Properties: no unhandled exception, decoding continues, open transfers never exceed `limits.tp_sessions`, PGNs per connection never exceed `limits.pgns_per_conn`, malformed counts match what was sent. Fixed seed in CI, random seed nightly; failures saved as regression cases.
+**Malformed input (`tests/malformed/`, SC-12a):** Hypothesis starts with `decode` in **step 1** (bad lengths, out-of-order and duplicate TP.DT, RTS over 1785 bytes, aborts, ETP fragments, bad and all-zero NAMEs) and adds `monitor` in step 4 (floods of new addresses and PGNs). Properties: no unhandled exception, decoding continues, open transfers never exceed `limits.tp_sessions`, PGNs per connection never exceed `limits.pgns_per_conn`, malformed counts match what was sent. Fixed seed in CI, random seed nightly (`.github/workflows/nightly.yml`, the seed in the job summary); failures saved as regression cases in `tests/malformed/regressions/` (format in its README), replayed in every CI run by `test_SC_12a_saved_regressions_replay`.
 
 ## 5. Communications tests
 
@@ -137,7 +137,7 @@ Communications tests prove the logger joins the bus safely. Level shows where ea
 | COM-06 | Protocol responses | Component | Request for Address Claim (to the logger and global); another request to the logger | Re-claims; NACKs | NP-8 |
 | COM-07 | Sweep schedule | Component | `FakeClock` advanced 35 minutes | Global Request for Address Claim after claiming and every 10 minutes | NP-11, LOG-9 |
 | COM-08 | Session-start requests | Replay | `ecu_sim` engine at SA 0 answers | VIN to `requests.vin_sa` and Time/Date at start; replies recorded | NP-12 |
-| COM-09 | Identity requests | Replay | New device answers Component ID, NACKs Software ID, ignores ECU ID | 1.25 s timeout, one retry; three outcomes recorded; none repeated | NP-13, NP-14 |
+| COM-09 | Identity requests | Replay | New device answers Component ID, NACKs Software ID, ignores ECU ID | 1.25 s timeout, one retry; three outcomes recorded; none repeated; at train start, failed requests asked once more and every device present asked (DC-26) | NP-13, NP-14 |
 | COM-10\* | Transmit guard | Unit; component; rig A3 | Fault `tx_breach`; a burst above 10 frames/s | Offending frame never sent; transmit off; high fault | NP-9, NP-16, NP-18 |
 | COM-11\* | Bus-off and error-passive | Component; rig A3 | Faults `bus_off`, `error_passive`; on the rig, no ACK partner | Transmit off for the session; listen-only; fault; detection continues | NP-3 |
 | COM-12 | Own traffic excluded | Replay | Logger claims and requests while a device replies | No records from its own frames or replies to it | NP-15 |

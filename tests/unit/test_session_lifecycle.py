@@ -502,3 +502,28 @@ def test_LOG_5_SN_d2_corrupt_state_with_a_blank_card_starts_session_1(tmp_path: 
     r = all_records(tmp_path)
     assert (r[0]["session"], r[0]["prev"]) == (1, ZERO_HASH)
     assert [(x["type"], x["sev"]) for x in r[1:2]] == [("fault", "notice")]
+
+
+def test_STS_19_read_only_card_at_start_up_is_a_high_fault(tmp_path: Path) -> None:
+    s, fc, p = make(tmp_path, plan=[(0.0, "erofs", {"for_s": 105.0})])  # read-only until 105 s
+    s.start()
+    st = s.status_state()  # before any frame: the session has not started recording
+    assert st.state == "fault" and p.lights[-1] == "fast"
+    assert st.fault is not None and st.fault.startswith("card not writable at start-up")
+    assert "erofs" in st.fault
+    feed(s, fc, 20)  # the card is writable again
+    assert p.lights[-1] == "fast"  # the high fault stays until it is cleared
+    stop(s)
+    faults = [
+        r
+        for r in all_records(tmp_path)
+        if r["type"] == "fault" and r["cause"].startswith("card not writable at start-up")
+    ]
+    assert [r["sev"] for r in faults] == ["high"]  # written once the card was writable
+
+
+def test_STS_19_writable_card_at_start_up_gives_no_fault(tmp_path: Path) -> None:
+    s, fc, p = make(tmp_path)
+    s.start()
+    assert s.status_state().state != "fault" and "fast" not in p.lights
+    stop(s)

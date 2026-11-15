@@ -69,6 +69,8 @@ class _CardPart(_State):
                 self._versions["config"] = cfg.version
 
     def _state_name(self) -> str:
+        if self._card_fault is not None:
+            return "fault"  # the card was not writable at start-up (STS-19)
         if self.eventlog is None or self._header_pending:
             return "starting"
         if self._bitrate is None:
@@ -102,7 +104,7 @@ class _CardPart(_State):
             bitrate=self._bitrate,
             logger_sa=self.logger_sa,
             unreviewed_high=len(self._unreviewed),
-            fault=self._high_fault,
+            fault=self._high_fault if self._high_fault is not None else self._card_fault,
             card_used_pct=pct,
             card_nearly_full=pct is not None and pct >= warn,
             clock_valid=reading.valid,
@@ -128,7 +130,36 @@ class _CardPart(_State):
         if self.status.pattern != before:
             self.diag.log("info", "status", f"light {self.status.pattern}")  # STS-1
         if data is not None:
-            self.store.write_atomic("status", "status", data)
+            if self.store.write_atomic("status", "status", data) and self._card_fault is not None:
+                self._card_writable_again()
+
+    def _card_check(self) -> None:
+        """STS-19: check the card is writable before the first session opens.
+
+        The status file is written through ``store``. If that fails, the session
+        records a high fault and shows the fault state (fast blink) at once; the
+        fault record is written when the session file can be written (LOG-22).
+        """
+        now = self.clock.mono()
+        data = self.status.update(self.status_state(), now, self._now_text())
+        if data is None or self.store.write_atomic("status", "status", data):
+            return
+        faults = self.store.take_faults()
+        cause = str(faults[0].fields.get("cause")) if faults else "status file write failed"
+        self._card_fault = f"card not writable at start-up ({cause})"
+        self._high_fault = self._card_fault
+        self.status.update(self.status_state(), now, self._now_text())  # fast blink now
+
+    def _card_writable_again(self) -> None:
+        """The start-up card fault is over: write its high fault record (STS-19, LOG-22)."""
+        assert self._card_fault is not None
+        fault = (self._card_fault, "nothing was recorded until the card was writable")
+        self._card_fault = None
+        if self.eventlog is None:
+            self._startup_faults.append(fault)  # written when the session opens
+        else:
+            self._log(Record("fault", "high", None, None,
+                             {"cause": fault[0], "logger_action": fault[1]}))  # fmt: skip
 
     def _raw_start(self, conn: int, ts_mono: float) -> Optional[str]:
         """Start a raw capture for an event; the name for ``raw_capture`` or None (LOG-10)."""

@@ -378,8 +378,17 @@ class _CommandsPart(_State):
                 self.training.observe(
                     J1939Msg(now, 0.0, 6, 60928, sa, 255, data, False, False, False)
                 )
+        for o in self.outcomes:  # identity replies already received this session (DC-26)
+            if o.outcome == "reply":
+                self.training.identity(o.da, o.pgn, o.outcome, o.value)
         self._proposal = None
         self._drop_inventory()  # detection runs as in untrained mode during training
+        if self.requests is not None:  # VIN and identity again (NP-12, NP-13; DC-26)
+            own = (None, self._logger_name)
+            present = [sa for sa in range(254)
+                       if sa != self.logger_sa and self.detect.name_at(sa) not in own]  # fmt: skip
+            requests = self.requests
+            self._tx_call("requests.training_start", lambda: requests.training_start(present))
         self._log(
             Record(
                 "training_start",

@@ -107,6 +107,7 @@ class _State:
         self._retrieved: list[str] = []  # files the laptop has retrieved (LOG-11)
         self._inventory_active = True  # False after retrain until a training is confirmed
         self._high_fault: Optional[str] = None
+        self._card_fault: Optional[str] = None  # card not writable at start-up (STS-19)
         self._vin_status: Optional[str] = None
         self._status_mono = float("-inf")
         self.exit_code = 0
@@ -200,6 +201,9 @@ class _State:
         raise NotImplementedError  # defined in another part of Session
 
     def status_state(self) -> State:
+        raise NotImplementedError  # defined in another part of Session
+
+    def _card_check(self) -> None:
         raise NotImplementedError  # defined in another part of Session
 
     def _update_status(self, force: bool = False) -> None:

@@ -49,6 +49,7 @@ class Session(_CanPart, _CardPart, _CommandsPart, _IdentificationPart):
         backoff and the first session opens on the first frame (errors.md can_missing).
         """
         self._load_library()
+        self._card_check()  # STS-19, before the first session opens
         try:
             self.capture.start(listen_only=True)
         except PlatformError as exc:
@@ -145,12 +146,13 @@ class Session(_CanPart, _CardPart, _CommandsPart, _IdentificationPart):
             self._buffer.append((record, ts_mono))
             return
         event_id = self.eventlog.append(record)
+        if record.sev == "high" and record.type == "fault":
+            # The fault state, even when the record itself cannot be written (LOG-22, STS-19).
+            self._high_fault = str(record.fields.get("cause"))
         if event_id is not None:
             self._counts[record.sev] = self._counts.get(record.sev, 0) + 1
             if record.sev == "high":
                 self._unreviewed.append(event_id)  # until cleared (STS-2)
-                if record.type == "fault":
-                    self._high_fault = str(record.fields.get("cause"))
                 self._save_state()
 
     def _drain_faults(self) -> None:

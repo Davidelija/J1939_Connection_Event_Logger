@@ -190,11 +190,11 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Rules:** a Commanded Address (65240) directed at the logger's NAME is ignored (NP-8). Address choice (DC-12): from `address.claim_from` down to `address.claim_down_to`, skipping inventory addresses, addresses claimed this session and `address.reserved`. The lower NAME wins a contest; the logger's NAME is the highest possible, so it always concedes. `address.claim_wait_ms` after a claim before other traffic (NP-6). After `address.claim_retries` + 1 losses, Cannot Claim from the null address (254) and receive-only for the session (NP-7). Answers Request for Address Claim; NACKs any other request addressed to the logger.
 - **Config:** `address.*`. **Requirements:** NP-4 to NP-8, DET-4. **Test seam:** feed messages and a `FakeClock`; check the `TxRequest` sequence.
 
-### requests  (v1, layer 3) — frozen for step 3
+### requests  (v2, layer 3) — frozen for step 3; v2 (DC-26)
 - **Purpose:** the logger's scheduled and identity requests.
-- **Inputs:** session start; new connections from `detect`; replies and NACKs (`J1939Msg`); `FakeClock` time.
+- **Inputs:** session start; new connections from `detect`; training start with the addresses present (`training_start(present)`, v2, DC-26); replies and NACKs (`J1939Msg`); `FakeClock` time.
 - **Outputs:** `TxRequest`s (sweep, Time/Date, VIN to `requests.vin_sa`, Component, Software and ECU ID); `RequestOutcome(conn, pgn, outcome, value)` to `identify`; `sweep` `Record`s; "first sweep complete" signal to `detect`.
-- **Rules:** 1.25 s timeout, one retry; addresses already held by a known NAME are not asked again.
+- **Rules:** 1.25 s timeout, one retry; addresses already held by a known NAME are not asked again. A failed request is not repeated in the session, except once at a training start (DC-26): `training_start(present)` asks VIN and each device's identity again, skipping any (PGN, destination) that replied or is still in flight, and asks a failed one once more, never again in the session.
 - **Config:** `requests.*`. **Requirements:** NP-11 to NP-14, DET-14. **Test seam:** messages plus clock in, `TxRequest`s and outcomes out.
 
 ### detect  (v1.3, layer 3) — frozen for step 4; v1.1 (DC-16); v1.2 (DC-17); v1.3 (DC-20)

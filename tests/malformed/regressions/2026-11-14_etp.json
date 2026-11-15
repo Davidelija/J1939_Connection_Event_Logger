@@ -1,0 +1,73 @@
+{
+  "finding": "seed example (QC U4): ETP.CM and ETP.DT with bad lengths and out-of-order packets, mixed with TP, a short claim, a short request and non-J1939 frames; the counts must match exactly",
+  "found": "2026-11-14, written by hand with the QC-3 changes",
+  "target": "decode",
+  "batches": [
+    [
+      {
+        "t": 0.0,
+        "can_id": "0x1CC800F9",
+        "data": "14b80b0000ecfe00"
+      },
+      {
+        "t": 0.01,
+        "can_id": "0x1CC700F9",
+        "data": "0300000000000000"
+      },
+      {
+        "t": 0.02,
+        "can_id": "0x1CC700F9",
+        "data": "0100000000000000"
+      },
+      {
+        "t": 0.03,
+        "can_id": "0x1CC800F9",
+        "data": "14b80b"
+      },
+      {
+        "t": 0.04,
+        "can_id": "0x1CC800F9",
+        "data": "1501"
+      },
+      {
+        "t": 0.05,
+        "can_id": "0x1CC700F9",
+        "data": "00000000000000000000"
+      },
+      {
+        "t": 0.06,
+        "can_id": "0x1CEEFF03",
+        "data": "00000000000000"
+      },
+      {
+        "t": 0.07,
+        "can_id": "0x1CECFFF9",
+        "data": "20140003ffecfe00"
+      },
+      {
+        "t": 0.08,
+        "can_id": "0x1CEBFFF9",
+        "data": "0200000000000000"
+      },
+      {
+        "t": 0.09,
+        "can_id": "0x123",
+        "data": "00",
+        "extended": false
+      },
+      {
+        "t": 0.1,
+        "can_id": "0x18FEEE00",
+        "data": "",
+        "remote": true
+      }
+    ],
+    [
+      {
+        "t": 0.5,
+        "can_id": "0x1CEA0003",
+        "data": "0000000000"
+      }
+    ]
+  ]
+}

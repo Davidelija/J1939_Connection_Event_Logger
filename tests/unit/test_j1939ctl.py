@@ -257,6 +257,60 @@ def test_TRN_4_train_finish_asks_before_applying(logger: Any) -> None:
     ]
 
 
+# -- LAP-14: training coverage ------------------------------------------------------------------
+
+
+def _drive(s: Session, fc: FakeClock, seconds: float, rpm: float) -> None:
+    """The engine at SA 0 reports ``rpm`` (EEC1) while it and the scan tool at 249 send."""
+    end = fc.mono() + seconds
+    raw = int(rpm / 0.125).to_bytes(2, "little")
+    while fc.mono() < end:
+        s.capture._ingest(frame((3 << 26) | (61444 << 8), bytes(3) + raw + bytes(3), fc.mono()))
+        run_bus(s, fc, 1.0, 0, 249)
+
+
+def _train_two_conditions(s: Session, fc: FakeClock, t: Local) -> None:
+    assert ctl(t, "--yes", "train", "start")[0] == EXIT_OK
+    _drive(s, fc, 180.0, 0.0)  # key-on engine off for 3 minutes
+    _drive(s, fc, 120.0, 800.0)  # then idle for 2 minutes
+
+
+def test_LAP_14_train_status_shows_time_conditions_devices_and_pgn_counts(logger: Any) -> None:
+    s, fc, t = logger
+    _train_two_conditions(s, fc, t)
+    code, text = ctl(t, "train", "status")
+    assert code == EXIT_OK
+    lines = text.splitlines()
+    assert lines[0].startswith("Training for 5 min, ") and lines[0].endswith(" min left")
+    assert int(lines[0].split(", ")[1].split()[0]) in (114, 115)  # 120-minute timeout (TRN-3)
+    assert lines[1:4] == [
+        "Conditions covered: key-on engine off, idle",
+        "Still to cover: driving, PTO",
+        "Devices found: 2",
+    ]
+    assert lines[4:6] == [
+        f"  0x{ENGINE:016X} at SA [0]: 2 PGNs",  # EEC1 and 65262
+        f"  0x{SCAN:016X} at SA [249]: 1 PGNs",
+    ]
+
+
+def test_LAP_14_status_file_holds_training_coverage(logger: Any) -> None:
+    s, fc, t = logger
+    _train_two_conditions(s, fc, t)
+    status = json.loads((t.card / "status.json").read_text("utf-8"))
+    reply = s.handle("train_status")["result"]
+    assert status["state"] == "training"
+    assert status["training_coverage"] == reply["coverage"]  # the same coverage as train status
+    cov = status["training_coverage"]
+    assert (cov["conditions"], cov["missing"]) == (
+        ["key-on engine off", "idle"],
+        ["driving", "PTO"],
+    )
+    engine = cov["pgns_per_ecu"][0]
+    assert engine["addresses"] == [0]
+    assert engine["pgns"] == {"key-on engine off": [61444, 65262], "idle": [61444, 65262]}
+
+
 # -- LAP-5, LAP-6, LAP-9: retrieval ---------------------------------------------------------------
 
 

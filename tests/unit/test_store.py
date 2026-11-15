@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -120,3 +121,41 @@ def test_STS_3_card_usage_is_reported(tmp_path: Path) -> None:
     store, _, _ = make(tmp_path)
     u = store.usage()
     assert u.total_bytes > 0 and 0.0 <= u.used_pct <= 100.0
+
+
+def test_LOG_23_write_atomic_syncs_the_file_and_the_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, _, _ = make(tmp_path / "root")
+    events: list[tuple[str, str]] = []
+    names: dict[int, str] = {}
+    real_open, real_fsync, real_replace = os.open, os.fsync, os.replace
+
+    def spy_open(path: object, flags: int, mode: int = 0o777) -> int:
+        target = Path(str(path))
+        if target.is_dir():  # Windows cannot open a folder: a stand-in file keeps the order
+            fd = real_open(tmp_path / "dir-stand-in", os.O_RDWR | os.O_CREAT, 0o644)
+            names[fd] = f"dir:{target.name}"
+        else:
+            fd = real_open(path, flags, mode)  # type: ignore[arg-type]
+            names[fd] = f"file:{target.name}"
+        return fd
+
+    def spy_fsync(fd: int) -> None:
+        events.append(("fsync", names.get(fd, "?")))
+        real_fsync(fd)
+
+    def spy_replace(src: object, dst: object) -> None:
+        events.append(("replace", Path(str(dst)).name))
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "open", spy_open)
+    monkeypatch.setattr(os, "fsync", spy_fsync)
+    monkeypatch.setattr(os, "replace", spy_replace)
+    assert store.write_atomic("inventory", "inv-v3", b"{}") is True
+    target = store.path("inventory", 3)
+    assert events == [
+        ("fsync", f"file:.{target.name}.tmp"),  # the temporary file, before the rename
+        ("replace", target.name),
+        ("fsync", f"dir:{target.parent.name}"),  # then the folder that holds it
+    ]

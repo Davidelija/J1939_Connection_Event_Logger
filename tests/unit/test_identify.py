@@ -21,6 +21,7 @@ from j1939logger.identify import (
     reply_text,
     severity,
 )
+from j1939logger.identify import _scores as scores  # the IDN-4 score, for known answers
 from j1939logger.requests import RequestOutcome
 from j1939logger.types import Connection, Name
 
@@ -66,6 +67,9 @@ def none(pgn: int, outcome: str = "no reply", t: float = 102.0) -> RequestOutcom
 EXAMPLE_OUTCOMES = [none(65259, t=102.002), reply(65242, b"\x01VDT 4.2.1*", t=104.502),
                     none(64965, "NACK", t=104.532)]  # fmt: skip
 EXAMPLE_REQUESTS = {65260, 65259, 65226, 65227}
+# Session 142: what SA 249 had requested when its identification was written (rec 6,
+# 14:31:44.658Z); DM2 (65227) and DM11 (65235) came later, before connection_end.
+ID_TIME_REQUESTS = {65260, 65259, 65226}
 
 
 def name_with(**fields: int) -> Name:
@@ -140,9 +144,38 @@ def test_DET_18_reclassified_identification_is_unrecognized_and_high() -> None:
 # -- IDN-4: library score -------------------------------------------------------
 
 
+def test_IDN_4_score_known_answers() -> None:
+    a, b, c, d, e = 65226, 65227, 65259, 65260, 65235
+    name = decode_name(SCAN_TOOL)
+
+    def score(requested: set[int], never: tuple[int, ...] = (), sends_never: tuple[int, ...] = (),
+              sent: frozenset[int] = frozenset()) -> float:  # fmt: skip
+        dev = {**entry("t", typical=(a, b, d), never=never), "sends_never": list(sends_never)}
+        [s] = scores(name, requested, set(sent), Library("lib-t", (dev,), {}))
+        return s.score
+
+    assert score({a, b, c}) == 0.5  # Jaccard: |{A,B}| / |{A,B,C,D}| = 2/4 (IDN-4)
+    assert score({a, b, c}, never=(c,)) == 0.25  # a requests_never PGN seen: minus 0.25
+    assert score({a, b, c}, sends_never=(e,), sent=frozenset({e})) == 0.25  # sends_never too
+    assert score({a, c}, never=(c,)) == 0.0  # 1/4 - 0.25
+    assert score({c}, never=(c,)) == 0.0  # 0 - 0.25: the floor is 0
+    assert score({a, b, d}) == 1.0
+
+
+def test_IDN_4_session_142_scores_at_identification_time() -> None:
+    got = {s.entry["type"]: s.score
+           for s in scores(decode_name(SCAN_TOOL), ID_TIME_REQUESTS, set(), library())}  # fmt: skip
+    assert got == pytest.approx({
+        "diagnostic tool, code reader": 0.60,  # 3/5
+        "diagnostic tool, service or reprogramming": 0.40,  # 2/5
+        "diagnostic tool, heavy-duty scan tool": 0.25,  # 2/8
+        "ELD": 0.125,  # 1/8; never-PGNs not seen
+    })  # fmt: skip
+
+
 def test_IDN_4_session_142_scan_tool_is_a_code_reader_at_medium() -> None:
-    ident = identify(conn(), EXAMPLE_OUTCOMES, EXAMPLE_REQUESTS, library(), tie_margin=TIE)
-    assert ident.type_guess == "diagnostic tool, code reader"  # 0.8, next best 0.6
+    ident = identify(conn(), EXAMPLE_OUTCOMES, ID_TIME_REQUESTS, library(), tie_margin=TIE)
+    assert ident.type_guess == "diagnostic tool, code reader"  # 0.60; next best 0.40, beyond 0.1
     assert (ident.make, ident.model, ident.make_source) == (
         "unknown (mfr code 413; no manufacturer list loaded)", None, "none",
     )  # fmt: skip
@@ -153,7 +186,7 @@ def test_IDN_4_session_142_scan_tool_is_a_code_reader_at_medium() -> None:
 def test_IDN_4_record_matches_the_example_identification() -> None:
     lines = (EXAMPLES / "s000142_20261106T140211Z.jsonl").read_text(encoding="utf-8")
     example = next(r for r in map(json.loads, lines.splitlines()) if r["rec"] == 6)
-    ident = identify(conn(), EXAMPLE_OUTCOMES, EXAMPLE_REQUESTS, library(), tie_margin=TIE)
+    ident = identify(conn(), EXAMPLE_OUTCOMES, ID_TIME_REQUESTS, library(), tie_margin=TIE)
     rec = identification_record(conn(), ident, EXAMPLE_OUTCOMES,
                                 lambda t: START + timedelta(seconds=t - 100.0))  # fmt: skip
     assert (rec.type, rec.sev, rec.conn) == ("identification", "notice", 2)

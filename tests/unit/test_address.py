@@ -46,6 +46,17 @@ def test_NP_5_logger_name_is_arbitrary_address_capable_and_maximal() -> None:
     assert (n.function_instance, n.ecu_instance) == (31, 7)
 
 
+def test_NP_5_logger_concedes_even_to_a_higher_name(tmp_path: Path) -> None:
+    higher = (1 << 63) | (2 << 60)  # arbitrary-address-capable, industry group 2 (agricultural)
+    assert higher > NAME  # J1939 arbitration would give the address to the logger
+    a = make(tmp_path)
+    a.start()
+    sends, [rec] = a.on_message(claim(higher, 247))
+    assert rec.type == "address_conflict" and rec.fields["cause"] == "the logger lost its claim"
+    [(req, sa)] = sends
+    assert (req.pgn, sa, a.current) == (PGN_CLAIM, 246, 246)  # conceded, NP-7's next address
+
+
 def test_NP_4_claims_247_first_with_the_logger_name(tmp_path: Path) -> None:
     a = make(tmp_path)
     [(req, sa)] = a.start()
