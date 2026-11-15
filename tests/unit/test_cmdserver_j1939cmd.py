@@ -236,14 +236,52 @@ def test_STS_5_j1939cmd_reads_the_key_from_ssh_user_auth(tmp_path: Path) -> None
 # -- main (DC-21 item 7) ----------------------------------------------------------------
 
 
-def test_STS_9_main_seeds_an_empty_card_from_the_files_given(tmp_path: Path) -> None:
+def test_STS_9_main_seeds_an_empty_card_from_the_files_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Session, "run", lambda self, idle_s=0.01: None)  # do not loop
     code = logger_main(["--config", str(EXAMPLES / "cfg-v3.json"), "--inventory",
                         str(EXAMPLES / "inv-v2.json"), "--root", str(tmp_path),
                         "--interface", "nonexistent9"])  # fmt: skip
-    assert code == 1  # no such CAN interface here; the card was seeded first
+    assert code == 0  # a missing CAN interface no longer stops the logger (can_missing)
     assert (tmp_path / "card" / "config" / "cfg-v3.json").exists()
     assert (tmp_path / "card" / "inventory" / "inv-v2.json").exists()
 
 
 def test_STS_19_main_without_any_config_stops_with_exit_code_2(tmp_path: Path) -> None:
     assert logger_main(["--root", str(tmp_path)]) == 2
+
+
+def test_STS_23_an_over_long_socket_path_is_a_clear_startup_fault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from j1939logger.cmdserver import check_path
+
+    long_path = tmp_path / ("x" * 120) / "cmd.sock"
+    problem = check_path(long_path)
+    assert problem is not None and ("limit is 107" in problem or "not available" in problem)
+    seen: list[Any] = []
+
+    def no_loop(self: Session, idle_s: float = 0.01) -> None:
+        seen.append(self)
+
+    monkeypatch.setattr(Session, "run", no_loop)
+    code = logger_main(["--config", str(EXAMPLES / "cfg-v3.json"), "--root", str(tmp_path),
+                        "--interface", "nonexistent9", "--socket", str(long_path)])  # fmt: skip
+    assert code == 0  # no crash
+    [s] = seen
+    assert any(isinstance(f, tuple) and f[0].startswith("command socket not started")
+               for f in s._startup_faults)  # fmt: skip
+
+
+def test_LAP_5_retrieve_list_hashes_files_in_chunks(tmp_path: Path) -> None:
+    import hashlib
+
+    from j1939logger.session import card_files
+
+    (tmp_path / "raw").mkdir()
+    big = bytes(range(256)) * 9000  # over two 1 MiB chunks
+    (tmp_path / "raw" / "s000001_c1_e1.log").write_bytes(big)
+    [entry] = card_files(tmp_path)
+    assert entry == {"path": "raw/s000001_c1_e1.log", "size": len(big),
+                     "sha256": hashlib.sha256(big).hexdigest()}  # fmt: skip

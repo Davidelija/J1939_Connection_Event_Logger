@@ -393,3 +393,60 @@ def test_NP_9_witness_on_vcan0_sees_only_allowed_frames_within_the_rate_cap(tmp_
         watch.close()
     assert seen and seen[0][1] == 0x18EEFFF7  # the claim comes first
     witness(seen)
+
+
+# -- NP-18: any unexpected error in the transmit or request code -------------------------
+
+
+def _claim(name: int, sa: int, t: float) -> Frame:
+    return frame(0x18EEFF00 | sa, name.to_bytes(8, "little"), t)
+
+
+def _broken(*a: Any, **k: Any) -> Any:
+    raise RuntimeError("probe")
+
+
+def _transmit_off(recs: list[dict[str, Any]], where: str) -> list[dict[str, Any]]:
+    cause = f"transmit turned off: unexpected error: RuntimeError in {where}"
+    return [r for r in recs if r["type"] == "fault" and r["sev"] == "high" and r["cause"] == cause]
+
+
+def test_NP_18_unexpected_error_in_requests_turns_transmit_off_and_logging_continues(
+    tmp_path: Path,
+) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    assert s.requests is not None and s.transmit is not None and s.transmit.enabled
+    s.requests.poll = _broken  # type: ignore[method-assign]
+    run(s, fc, 1.0)  # must not raise out of the session
+    assert not s.transmit.enabled and s.transmit.off_reason is not None
+    before = len(sent)
+    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    run(s, fc, 2.0)
+    assert len(sent) == before  # nothing more is sent this session
+    stop(s)
+    recs = records(tmp_path)
+    assert len(_transmit_off(recs, "requests.poll")) == 1
+    assert any(r["type"] == "connection_start" and r["sa"] == 249 for r in recs)  # still logging
+    assert recs[-1]["type"] == "session_end"
+    diag = (tmp_path / "card" / "diag" / "logger.log").read_text("utf-8")
+    assert "requests.poll" in diag and "RuntimeError: probe" in diag
+
+
+def test_NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_continues(
+    tmp_path: Path,
+) -> None:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    run(s, fc, 1.0)
+    assert s.address is not None and s.transmit is not None
+    s.address.on_message = _broken  # type: ignore[method-assign]
+    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    run(s, fc, 2.0)
+    assert not s.transmit.enabled
+    stop(s)
+    recs = records(tmp_path)
+    assert len(_transmit_off(recs, "address.on_message")) == 1
+    assert any(r["type"] == "connection_start" and r["sa"] == 249 for r in recs)
+    assert recs[-1]["type"] == "session_end"

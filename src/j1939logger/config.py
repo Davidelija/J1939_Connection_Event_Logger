@@ -29,7 +29,12 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Callable, Optional, Union
 
-from j1939logger.transmit import RELEASE_REQUEST_ALLOW, RELEASE_TRANSMIT_ALLOW
+from j1939logger.transmit import (
+    RELEASE_MAX_FPS,
+    RELEASE_MAX_OUTSTANDING,
+    RELEASE_REQUEST_ALLOW,
+    RELEASE_TRANSMIT_ALLOW,
+)
 from j1939logger.types import CATEGORIES, Record
 
 __all__ = [
@@ -253,6 +258,18 @@ def validate(new: Mapping[str, Any], old: Optional[Config] = None) -> Union[Conf
         if added:
             reasons.append(
                 f"{key} adds {added}; the allow-list changes only with a software release"
+            )
+    for key, cap in (
+        ("transmit.max_frames_per_s", RELEASE_MAX_FPS),
+        ("transmit.max_outstanding_per_dest", RELEASE_MAX_OUTSTANDING),
+    ):  # NP-16, rule 4: the rate cap is never raised by configuration
+        value = values[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            reasons.append(f"{key} must be a positive whole number")
+        elif value > cap:
+            reasons.append(
+                f"{key} {value} is over the release cap {cap}; "
+                "the rate cap changes only with a software release"
             )
     if values["detection.move_grace_s"] > MAX_MOVE_GRACE_S:
         reasons.append(f"detection.move_grace_s over {MAX_MOVE_GRACE_S:g} s")

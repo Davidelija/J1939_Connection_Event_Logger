@@ -374,3 +374,112 @@ def test_LOG_5_crash_before_the_header_continues_the_chain_from_the_older_file(
     third = recs(files[-1].path)[0]
     assert (third["session"], third["prev"]) == (3, last)  # the chain continues
     verify(all_records(tmp_path))
+
+
+# -- errors.md can_missing, can_down, rx_overflow (QC-1) --------------------------------
+
+
+class _FlakyBus(_NoBus):
+    """open_can fails with can_missing until ``up`` is set."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(**kw)
+        self.up = False
+        self.opens: list[float] = []
+
+    def open_can(self, listen_only: bool) -> socket.socket:
+        assert self._fake is not None
+        self.opens.append(self._fake.mono())
+        if not self.up:
+            from j1939logger.types import PlatformError
+
+            raise PlatformError("can_missing", "no such device")
+        return super().open_can(listen_only)
+
+
+def test_NP_17_missing_interface_is_retried_with_backoff_and_logged_once(tmp_path: Path) -> None:
+    fc = FakeClock(start_utc=START, start_mono=100.0)
+    p = _FlakyBus(clock=fc, root=tmp_path)
+    versions = {"config": "cfg-v3", "inventory": None, "library": None}
+    s = Session(p, settings(), None, versions, None)
+    s.start()  # must not raise
+    for _ in range(700):  # 70 s without an interface
+        s.step()
+        fc.advance(0.1)
+    gaps = [b - a for a, b in zip(p.opens, p.opens[1:])]
+    assert len(p.opens) >= 4 and gaps == sorted(gaps)  # backoff, not a busy loop
+    assert max(gaps) <= 30.0 + 0.2
+    p.up = True
+    for _ in range(400):
+        s.capture._ingest(eec1(fc.mono()))
+        s.step()
+        fc.advance(0.1)
+    stop(s)
+    faults = [r for r in all_records(tmp_path) if r["type"] == "fault"]
+    lost = [r for r in faults if r["cause"].startswith("CAN interface missing for")]
+    assert len(lost) == 1 and lost[0]["sev"] == "high"  # once, with a count
+    assert "tries)" in lost[0]["cause"]
+
+
+def test_NP_17_interface_down_while_running_keeps_the_session_and_retries(tmp_path: Path) -> None:
+    from j1939logger.types import PlatformError
+
+    s, fc, p = make(tmp_path)
+    s.start()
+    feed(s, fc, 3.0)
+    s.capture._fail(PlatformError("can_down", "ENETDOWN"))
+    s.step()  # must not raise or end the session
+    assert s.eventlog is not None
+    feed(s, fc, 5.0)  # the socket opens again after the backoff
+    stop(s)
+    r = all_records(tmp_path)
+    assert r[-1]["type"] == "session_end" and r[-1]["reason"] == "service stopped"
+    assert "CAN interface can_down" in (tmp_path / "card" / "diag" / "logger.log").read_text(
+        "utf-8"
+    )
+
+
+def test_LOG_15_kernel_drops_give_one_notice_fault_per_session(tmp_path: Path) -> None:
+    s, fc, _ = make(tmp_path)
+    s.start()
+    s.capture._ingest(eec1(fc.mono()), drops=4)
+    s.step()
+    s.capture._ingest(eec1(fc.mono()), drops=9)
+    s.step()
+    stop(s)
+    r = all_records(tmp_path)
+    drops = [x for x in r if x["type"] == "fault" and "dropped" in x["cause"]]
+    assert [(x["sev"], x["cause"]) for x in drops] == [
+        ("notice", "the kernel dropped 4 received frames (SO_RXQ_OVFL)")
+    ]
+    assert r[-1]["kernel_drops"] == 9
+
+
+# -- LOG-5: SN-b and SN-d2 (test plan) -----------------------------------------------------
+
+
+def test_LOG_5_SN_b_state_missing_with_sessions_continues_numbering_and_chain(
+    tmp_path: Path,
+) -> None:
+    s, fc, _ = make(tmp_path)
+    s.start()
+    stop(s)
+    last = all_records(tmp_path)[-1]["hash"]
+    (tmp_path / "flash" / "state.json").unlink()
+    s2, _, _ = make(tmp_path, fc=fc)
+    s2.start()
+    stop(s2)
+    second = recs(session_files(tmp_path / "card" / "sessions")[1].path)
+    assert (second[0]["session"], second[0]["new_card"], second[0]["prev"]) == (2, False, last)
+    verify(all_records(tmp_path))
+
+
+def test_LOG_5_SN_d2_corrupt_state_with_a_blank_card_starts_session_1(tmp_path: Path) -> None:
+    (tmp_path / "flash").mkdir()
+    (tmp_path / "flash" / "state.json").write_text("{not json")
+    s, _, _ = make(tmp_path)
+    s.start()
+    stop(s)
+    r = all_records(tmp_path)
+    assert (r[0]["session"], r[0]["prev"]) == (1, ZERO_HASH)
+    assert [(x["type"], x["sev"]) for x in r[1:2]] == [("fault", "notice")]

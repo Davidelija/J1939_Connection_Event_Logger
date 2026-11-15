@@ -265,3 +265,22 @@ def test_NP_3_bus_off_disable_drops_the_queue(tmp_path: Path) -> None:
     tx.disable("bus_off")
     run(tx, fc, 1.0)
     assert rec.frames == [] and tx.off_reason == "bus_off"
+
+
+def test_NP_16_transmit_clamps_to_the_release_cap(tmp_path: Path) -> None:
+    tx, rec, fc = make(tmp_path, over={"transmit.max_frames_per_s": 1000,
+                                       "transmit.max_outstanding_per_dest": 50})  # fmt: skip
+    pgns = [65254, 65260, 65259, 65242, 64965]
+    for i in range(40):
+        tx.submit(request(pgns[i % 5], da=i))
+    for _ in range(5):
+        tx.submit(request(65259, da=3))  # more to one destination
+    run(tx, fc, 0.5)
+    times = [t for t, _, _ in rec.frames]
+    assert 0 < len(times) <= 10  # at most 10 in the first half second, not 40
+    to_3 = [d for _, cid, d in rec.frames if (cid >> 8) & 0xFF == 3]
+    assert len(to_3) <= 1  # one outstanding per destination, not 50
+    run(tx, fc, 5.0)
+    times = [t for t, _, _ in rec.frames]
+    for t in times:
+        assert sum(1 for u in times if t <= u < t + 1.0) <= 10

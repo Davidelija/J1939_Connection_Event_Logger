@@ -188,3 +188,24 @@ def test_IDN_2_manufacturer_codes_are_read_from_the_library() -> None:
     assert result.manufacturers["413"] == "Example Tools Inc"
     lib["manufacturers"]["codes"] = {"abc": 1}
     assert isinstance(validate_library(lib), LibraryError)
+
+
+def test_NP_16_config_cannot_raise_the_rate_cap() -> None:
+    data = cfg3()
+    data["transmit"]["max_frames_per_s"] = 1000
+    data["transmit"]["max_outstanding_per_dest"] = 50
+    reasons = bad(data)
+    assert any("max_frames_per_s 1000 is over the release cap 10" in r for r in reasons)
+    assert any("max_outstanding_per_dest 50 is over the release cap 1" in r for r in reasons)
+    lower = cfg3()
+    lower["transmit"]["max_frames_per_s"] = 5  # lowering is allowed
+    assert ok(lower)["transmit.max_frames_per_s"] == 5
+
+
+def test_NP_16_config_rejects_zero_or_negative_rate_limits() -> None:
+    for key in ("max_frames_per_s", "max_outstanding_per_dest"):
+        for value in (0, -1, 2.5, True):
+            data = cfg3()
+            data["transmit"][key] = value
+            reasons = " / ".join(bad(data))  # refused, by the type check or the cap check
+            assert f"transmit.{key}" in reasons, (key, value)

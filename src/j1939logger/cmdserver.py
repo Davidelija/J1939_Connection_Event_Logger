@@ -30,7 +30,7 @@ from typing import Any, Optional
 
 from j1939logger.session import Session
 
-__all__ = ["CmdServer", "COMMANDS", "PROTO", "check", "request", "Pending"]
+__all__ = ["CmdServer", "COMMANDS", "PROTO", "check", "check_path", "request", "Pending"]
 
 PROTO = 1
 COMMANDS = frozenset({
@@ -40,6 +40,7 @@ COMMANDS = frozenset({
 })  # fmt: skip
 MAX_LINE = 4 * 1024 * 1024  # a config push is the largest request
 REPLY_TIMEOUT_S = 60.0
+MAX_PATH_BYTES = 107  # sockaddr_un.sun_path is 108 bytes with the closing NUL
 
 
 def _refused(error: str, next_step: str) -> dict[str, Any]:
@@ -60,6 +61,16 @@ def check(req: Any) -> Optional[dict[str, Any]]:
         return _refused(f"unknown command {cmd!r}", "run j1939ctl --help")
     if not isinstance(req.get("args", {}), dict):
         return _refused("args must be a JSON object", f"run j1939ctl {cmd} --help")
+    return None
+
+
+def check_path(path: Path) -> Optional[str]:
+    """Why the socket cannot be made at ``path``, or None (a clear startup fault, not a crash)."""
+    if not hasattr(socket, "AF_UNIX"):
+        return "Unix sockets are not available on this system"
+    n = len(os.fsencode(str(path)))
+    if n > MAX_PATH_BYTES:
+        return f"command socket path is {n} bytes; the limit is {MAX_PATH_BYTES}: {path}"
     return None
 
 
@@ -99,8 +110,9 @@ class CmdServer:
             self._busy.release()
 
     def start(self) -> None:
-        if not hasattr(socket, "AF_UNIX"):
-            raise OSError("Unix sockets are not available on this system")
+        problem = check_path(self.path)
+        if problem is not None:
+            raise OSError(problem)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             self.path.unlink()  # left over from a previous run
