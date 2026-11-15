@@ -31,26 +31,27 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
-## DC-new-20261114-train-requests — Question: at `train start`, ask VIN and identity again, as a bounded exception to NP-14  (proposed, 2026-11-14)
+## DC-26 — At `train start`, ask VIN and identity again, as a bounded exception to NP-14  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `qc-fixes-3` (QC finding R1: NP-12 and NP-13 disagree with NP-14)
-- **Decided by:**
+- **Decided by:** Vaughan Lynn, 2026-11-14 (option (a) accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
 - **The conflict:** NP-12 asks for VIN "at every session start and during training"; NP-13 asks for identity "from every device during training". NP-14 says a failed request is not repeated in the session, and `requests` also asks each (PGN, destination) only once per session. Training starts mid-session (`train start`), so today:
   - VIN is not requested again at `train start`; only the session-start request counts.
   - A device already on the bus when training starts is asked for identity only if its NAME was unknown when it connected. On a retrain, the known ECUs are never asked, so the new inventory has no self-reported identity for them (TRN-7).
   - Only devices first seen during training are asked, as NP-13 intends.
-- **Change (option (a), proposed):** at `train start`, `session` calls a new `requests.training_start(present)`:
+- **Change (option (a), accepted):** at `train start`, `session` calls a new `requests.training_start(present)`:
   - VIN (65260) is requested again from `requests.vin_sa`;
   - Component ID, Software ID and ECU ID are requested from every device present (every address with a claimed NAME this session), except the logger itself;
   - a (PGN, destination) that already **replied** this session is not asked again; its reply is reused;
   - a (PGN, destination) that **failed** this session (NACK or no reply) is asked once more. This is the stated exception to NP-14, and happens at most once per `train start`; if it fails again it is not repeated for the rest of the session.
 
   Every request still goes through `transmit` with the 10 frames/s and one-outstanding-per-destination limits (NP-16), and only for PGNs on `requests.allow_list` (NP-9).
-- **Option (b), the alternative:** reword NP-12 to "at every session start" and NP-13 to "and from every device first seen during training", and leave the code unchanged. A retrain then keeps no fresh self-reported identity for ECUs already present.
+- **Option (b), not chosen:** reword NP-12 to "at every session start" and NP-13 to "and from every device first seen during training", and leave the code unchanged. A retrain then keeps no fresh self-reported identity for ECUs already present.
 - **Why (a):** training builds the known-good inventory, and TRN-7 says each entry holds the device's self-reported identity. Under (b) a retrain on the same truck produces entries without it. The extra traffic is bounded: one VIN request plus at most three requests per device present, once per `train start`, inside the rate cap.
 - **Affects:** NP-12, NP-13, NP-14 (text); `requests` contract v1 to v2 (new `training_start(present)`); `session` (calls it from `train_start`); `docs/modules.md`; `docs/test-plan.md` (a COM-09 note).
 - **NP-14 new text (a):** "... and shall not repeat a failed request in the same session, except that `train start` asks each failed identity or VIN request once more (NP-12, NP-13)."
-- **Docs updated in the same change (once accepted):** `docs/requirements.md`, `docs/modules.md`, `docs/verification.md`, `docs/test-plan.md`, `CHANGELOG.md`.
-- **Tests (a):** `test_NP_12_train_start_requests_vin_again`, `test_NP_13_train_start_asks_identity_from_every_device_present`, `test_NP_14_train_start_repeats_a_failed_request_once_and_never_again`, `test_NP_14_train_start_does_not_ask_again_for_an_answered_request`.
+- **Docs updated in the same change:** `docs/requirements.md` (NP-12, NP-13, NP-14), `docs/modules.md` (`requests` v2), `docs/verification.md`, `docs/test-plan.md` (COM-09), `CHANGELOG.md`.
+- **Built as:** `requests.training_start(present)` (v2), called by `session` from `train_start` with every other address holding a claimed NAME; identity replies already received this session are passed to training (reused). VIN follows the same rules: asked again unless it already replied.
+- **Tests:** `test_NP_12_train_start_requests_vin_again`, `test_NP_12_train_start_requests_vin_unless_it_already_replied`, `test_NP_13_train_start_asks_identity_from_every_device_present`, `test_NP_14_train_start_repeats_a_failed_request_once_and_never_again`, `test_NP_14_train_start_does_not_ask_again_for_an_answered_request`.
 
 ## DC-25 — Add the transmit decisions in `session`, and `capture`, to the safety-critical paths  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `dc-codeowners` (found after QC items 6 and 11: the NP-18 guard moved into the `session` package)

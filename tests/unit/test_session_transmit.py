@@ -558,3 +558,45 @@ def test_NP_8_session_ignores_a_commanded_address_to_its_name(tmp_path: Path) ->
     stop(s)
     assert 200 not in _claims(sent)  # never claims the commanded address
     assert all(cid & 0xFF == 247 for _, cid, _ in sent)  # every frame still from 247
+
+
+def _requests_after(sent: list[tuple[float, int, bytes]], start: int) -> list[tuple[int, int]]:
+    """(destination, requested PGN) for each Request the logger sent from ``start`` on."""
+    return [((cid >> 8) & 0xFF, int.from_bytes(d[:3], "little"))
+            for _, cid, d in sent[start:] if pgn_of(cid) == 59904]  # fmt: skip
+
+
+def _session_with_engine_and_scan_tool(tmp_path: Path) -> tuple[Session, FakeClock, list[Any]]:
+    s, fc, sent = make(tmp_path)
+    s.start()
+    s.capture._ingest(_claim(ENGINE, 0, fc.mono()))  # a known ECU: never asked for identity
+    run(s, fc, 1.0)
+    s.capture._ingest(_claim(SCAN, 249, fc.mono()))  # unknown: asked when it connects
+    run(s, fc, 20.0)  # nobody answers: VIN and the scan tool's identity requests fail
+    return s, fc, sent
+
+
+def test_NP_12_train_start_requests_vin_again(tmp_path: Path) -> None:
+    s, fc, sent = _session_with_engine_and_scan_tool(tmp_path)
+    assert _requests_after(sent, 0).count((0, 65260)) == 2  # VIN and its retry: no reply
+    before = len(sent)
+    s.train_start("jdoe")
+    run(s, fc, 20.0)
+    stop(s)
+    assert _requests_after(sent, before).count((0, 65260)) == 2  # asked again, with its retry
+    witness(sent)
+
+
+def test_NP_13_train_start_asks_identity_from_every_device_present(tmp_path: Path) -> None:
+    s, fc, sent = _session_with_engine_and_scan_tool(tmp_path)
+    identity = {65259, 65242, 64965}
+    assert not identity & {pgn for da, pgn in _requests_after(sent, 0) if da == 0}
+    before = len(sent)
+    s.train_start("jdoe")
+    run(s, fc, 30.0)
+    stop(s)
+    after = _requests_after(sent, before)
+    assert identity <= {pgn for da, pgn in after if da == 0}  # the known ECU, now asked
+    assert identity <= {pgn for da, pgn in after if da == 249}  # the scan tool's one more try
+    assert all(da in (0, 249) for da, _ in after)  # never the logger itself
+    witness(sent)  # still within the allow-lists and the rate cap

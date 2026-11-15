@@ -137,7 +137,7 @@ Communications tests prove the logger joins the bus safely. Level shows where ea
 | COM-06 | Protocol responses | Component | Request for Address Claim (to the logger and global); another request to the logger | Re-claims; NACKs | NP-8 |
 | COM-07 | Sweep schedule | Component | `FakeClock` advanced 35 minutes | Global Request for Address Claim after claiming and every 10 minutes | NP-11, LOG-9 |
 | COM-08 | Session-start requests | Replay | `ecu_sim` engine at SA 0 answers | VIN to `requests.vin_sa` and Time/Date at start; replies recorded | NP-12 |
-| COM-09 | Identity requests | Replay | New device answers Component ID, NACKs Software ID, ignores ECU ID | 1.25 s timeout, one retry; three outcomes recorded; none repeated | NP-13, NP-14 |
+| COM-09 | Identity requests | Replay | New device answers Component ID, NACKs Software ID, ignores ECU ID | 1.25 s timeout, one retry; three outcomes recorded; none repeated; at train start, failed requests asked once more and every device present asked (DC-26) | NP-13, NP-14 |
 | COM-10\* | Transmit guard | Unit; component; rig A3 | Fault `tx_breach`; a burst above 10 frames/s | Offending frame never sent; transmit off; high fault | NP-9, NP-16, NP-18 |
 | COM-11\* | Bus-off and error-passive | Component; rig A3 | Faults `bus_off`, `error_passive`; on the rig, no ACK partner | Transmit off for the session; listen-only; fault; detection continues | NP-3 |
 | COM-12 | Own traffic excluded | Replay | Logger claims and requests while a device replies | No records from its own frames or replies to it | NP-15 |

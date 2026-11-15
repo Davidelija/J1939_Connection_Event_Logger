@@ -180,3 +180,73 @@ def test_NP_9_never_requests_outside_the_request_allow_list(tmp_path: Path) -> N
     r.session_start()
     r.identify(conn=1, sa=0xF9, name=SCAN)
     assert {wanted(q) for q in r.poll()} == {60928, 65254}
+
+
+def _comp_silent_sw_reply_ecu_nack(r: Requests, fc: FakeClock) -> None:
+    """SA 0xF9's identity: Component ID unanswered, Software ID replies, ECU ID NACKs."""
+    r.identify(conn=2, sa=0xF9, name=SCAN)
+    [q] = r.poll()
+    assert wanted(q) == PGN_COMPONENT_ID
+    fc.advance(1.3)
+    [q] = r.poll()  # the retry (NP-14)
+    fc.advance(1.3)
+    [q] = r.poll()  # Component ID gives up; Software ID goes out
+    assert wanted(q) == PGN_SOFTWARE_ID
+    r.on_message(reply(PGN_SOFTWARE_ID, 0xF9), LOGGER_SA)
+    [q] = r.poll()
+    assert wanted(q) == PGN_ECU_ID
+    r.on_message(nack(PGN_ECU_ID, 0xF9), LOGGER_SA)
+    assert [(o.pgn, o.outcome) for o in r.take_outcomes()] == [
+        (PGN_COMPONENT_ID, "no reply"), (PGN_SOFTWARE_ID, "reply"), (PGN_ECU_ID, "NACK"),
+    ]  # fmt: skip
+
+
+def test_NP_14_train_start_repeats_a_failed_request_once_and_never_again(tmp_path: Path) -> None:
+    r, fc, _ = make(tmp_path)
+    _comp_silent_sw_reply_ecu_nack(r, fc)
+    r.identify(conn=2, sa=0xF9, name=SCAN)  # NP-14: nothing that failed is asked again ...
+    assert r.poll() == []
+    r.training_start([0xF9])  # ... except once when training starts (DC-26)
+    asked = []
+    for _ in range(4):
+        for q in r.poll():
+            if q.da == 0xF9:
+                asked.append(wanted(q))
+                r.on_message(nack(wanted(q), 0xF9), LOGGER_SA)  # fails again
+    assert asked == [PGN_COMPONENT_ID, PGN_ECU_ID]  # the two that failed; Software ID replied
+    assert [(o.pgn, o.outcome) for o in r.take_outcomes()] == [
+        (PGN_COMPONENT_ID, "NACK"), (PGN_ECU_ID, "NACK"),
+    ]  # fmt: skip
+    r.training_start([0xF9])  # a second training start in the session: never again
+    r.identify(conn=2, sa=0xF9, name=SCAN)
+    assert [q for q in r.poll() + r.poll() if q.da == 0xF9] == []
+
+
+def test_NP_14_train_start_does_not_ask_again_for_an_answered_request(tmp_path: Path) -> None:
+    r, fc, _ = make(tmp_path)
+    r.identify(conn=2, sa=0xF9, name=SCAN)
+    for pgn in (PGN_COMPONENT_ID, PGN_SOFTWARE_ID, PGN_ECU_ID):
+        [q] = r.poll()
+        assert wanted(q) == pgn
+        r.on_message(reply(pgn, 0xF9), LOGGER_SA)
+    r.take_outcomes()
+    r.training_start([0xF9])
+    assert [q for q in r.poll() if q.da == 0xF9] == []  # every reply is reused, none asked again
+
+
+def test_NP_12_train_start_requests_vin_unless_it_already_replied(tmp_path: Path) -> None:
+    r, fc, _ = make(tmp_path)
+    r.session_start()
+    r.poll()
+    r.on_message(reply(PGN_TIME_DATE, 0), LOGGER_SA)
+    [vin] = r.poll()
+    assert wanted(vin) == PGN_VIN
+    fc.advance(1.3)
+    r.poll()
+    fc.advance(1.3)
+    r.poll()  # the VIN request at session start gets no reply
+    r.training_start([])
+    assert [(q.da, wanted(q)) for q in r.poll()] == [(0, PGN_VIN)]  # asked again at train start
+    r.on_message(reply(PGN_VIN, 0, b"1XKYD49X0GJ123456"), LOGGER_SA)
+    r.training_start([])
+    assert r.poll() == []  # replied: a later training start reuses it

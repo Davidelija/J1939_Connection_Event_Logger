@@ -70,4 +70,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - `address.py`: the comment no longer calls the logger's NAME the highest possible; NAMEs in industry groups 2 to 5 are higher, and the logger concedes every contest by design.
 - CI: a nightly job runs `tests/malformed` with a random Hypothesis seed; `tests/malformed/regressions/` holds saved failing examples, replayed in every CI run.
 - `docs/verification.md`: NP-19 marked partial; results filled for TRN-2, TRN-5, TRN-7, TRN-13, IDN-2, LOG-1, LOG-13 and LAP-14; NP-14 and STS-19 tests named in full.
-- Proposed, not yet accepted: DC-new-20261114-train-requests (VIN and identity again at `train start`, as a bounded exception to NP-14).
+- DC-26 (NP-12, NP-13, NP-14): at `train start` the logger asks VIN and identity again from every device present; a request that already replied is reused, one that failed is asked once more and never again in the session. `requests` v2 adds `training_start(present)`.

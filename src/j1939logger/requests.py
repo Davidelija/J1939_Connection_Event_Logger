@@ -1,6 +1,6 @@
 """requests: the logger's scheduled and identity requests (docs/modules.md section 4, v1).
 
-Layer 3, frozen for step 3: no I/O; time only through ``clock``. It produces
+Layer 3, frozen for step 3, v2 (DC-26): no I/O; time only through ``clock``. It produces
 ``TxRequest``s (Request, PGN 59904, for a PGN in ``requests.allow_list``) for
 ``session`` to pass to ``transmit``, and tells ``transmit`` when a destination
 is free again (``release``, DC-12).
@@ -18,7 +18,12 @@ is free again (``release``, DC-12).
 * Timeouts (NP-14): each request waits ``requests.timeout_s`` for a reply or
   NACK and is retried ``requests.retries`` times; the outcome (reply, NACK, no
   reply) is recorded as a ``RequestOutcome``. A request that failed is not
-  repeated in the session.
+  repeated in the session, with one exception:
+* Training start (``training_start(present)``, DC-26; NP-12, NP-13, NP-14): VIN
+  from ``requests.vin_sa`` and identity from every address in ``present``. A
+  (PGN, destination) that already replied this session is not asked again (its
+  reply is reused); one still in flight is left alone; one that failed is asked
+  once more, and never again in the session, even at a later training start.
 * One request per destination at a time is kept here as well as in
   ``transmit``; the timer starts when the request is handed to ``transmit``.
 """
@@ -107,6 +112,8 @@ class Requests:
         self._active: dict[int, _Pending] = {}
         self._failed: set[tuple[int, int]] = set()  # (pgn, da) not repeated this session
         self._asked: set[tuple[int, int]] = set()
+        self._replied: set[tuple[int, int]] = set()  # answered this session (DC-26: reused)
+        self._retried: set[tuple[int, int]] = set()  # asked again at a training start (DC-26)
         self._outcomes: list[RequestOutcome] = []
         self._records: list[Record] = []
         self._next_sweep: Optional[float] = None
@@ -142,6 +149,30 @@ class Requests:
         for pgn in IDENTITY:
             self._enqueue(pgn, sa, conn)
 
+    def training_start(self, present: Iterable[int]) -> None:
+        """VIN and identity again when training starts (NP-12, NP-13; DC-26).
+
+        ``present`` is the addresses of the devices on the bus, without the logger.
+        The one exception to NP-14: a request that failed this session is asked
+        once more here, and never again in the session.
+        """
+        self._ask_for_training(PGN_VIN, self._vin_sa)
+        for sa in sorted(set(present)):
+            for pgn in IDENTITY:
+                self._ask_for_training(pgn, sa)
+
+    def _ask_for_training(self, pgn: int, da: int) -> None:
+        key = (pgn, da)
+        if key in self._replied or key in self._retried:
+            return  # answered (reused), or already given its one more try
+        if key in self._failed:
+            self._failed.discard(key)
+            self._retried.add(key)
+        elif key in self._asked:
+            return  # still queued or waiting for its reply
+        self._asked.discard(key)
+        self._enqueue(pgn, da)
+
     def poll(self) -> list[TxRequest]:
         """Timers and the next request for each free destination; returns what to send."""
         now = self._clock.mono()
@@ -175,6 +206,8 @@ class Requests:
         self._release(p.da)
         if outcome != "reply":
             self._failed.add((p.pgn, p.da))
+        else:
+            self._replied.add((p.pgn, p.da))
         if p.pgn != PGN_CLAIM:
             self._outcomes.append(
                 RequestOutcome(p.conn, p.pgn, p.da, outcome, value, p.attempt, p.first_sent_mono)
