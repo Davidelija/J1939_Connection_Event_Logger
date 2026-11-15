@@ -269,6 +269,7 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 - **Requirements:** STS-1 to STS-3. **Test seam:** state in, file contents and light pattern out (table-driven).
 
 ### session  (v1, layer 4) — frozen for step 2
+- **Layout:** a package, `j1939logger/session/`, split by concern (core, can, card, commands, identification, files, state) before step 8; `j1939logger.session` exports the same names as before. No contract change.
 - **Purpose:** the session lifecycle and the main loop.
 - **Inputs:** wake from `platform`; frames from `capture`; commands from `cmdserver`; the restart guard state; `state.json` from `store` (logger ID, last session number, last hash).
 - **Outputs:** `session_start` and `session_end` `Record`s; session files and parts; calls into every layer 3 module in order; watchdog kicks.

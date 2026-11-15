@@ -217,7 +217,8 @@ j1939-logger/
     transmit.py              transmit queue, rate cap, allow-list
     address.py               address claiming and conflicts
     requests.py              sweeps, Time/Date, VIN, identity requests
-    session.py               wake, key-off, session files, roll-over
+    session/                 wake, key-off, session files, roll-over (a package: core, can,
+                             card, commands, identification, files, state)
     detect.py                connection state machine
     monitor.py               PGN, request, DM and control-flag records
     identify.py              classification and identification

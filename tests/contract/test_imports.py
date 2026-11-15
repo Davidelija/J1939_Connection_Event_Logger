@@ -76,6 +76,7 @@ def test_NP_9_only_transmit_sends_and_only_session_hands_it_the_send_handle() ->
         rel = path.relative_to(PKG)
         text = _text(path)
         if "transmit_handle" in text or "TransmitHandle" in text:
-            assert rel.name in allowed_handle and rel.parts[0] != "platform", rel
+            in_session = rel.parts[0] == "session"  # session is a package of parts
+            assert (rel.name in allowed_handle or in_session) and rel.parts[0] != "platform", rel
         if rel.name not in ("capture.py",) and rel.parts[0] != "platform":
             assert ".send(" not in text.replace("self._handle.send(", ""), f"{rel} sends on the bus"
