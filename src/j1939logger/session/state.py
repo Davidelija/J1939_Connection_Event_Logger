@@ -94,6 +94,8 @@ class _State:
         self._dropped = False  # inventory dropped for the session (VIN mismatch, training)
         self._vin_received: Optional[str] = None
         self._tx_failed = False  # an unexpected error in the transmit or request code (NP-18)
+        # Why transmit is off when transmit.disable itself failed (NP-18); else None.
+        self._tx_off_reason: Optional[str] = None
         self._can_down_since: Optional[float] = None
         self._can_retry_at = 0.0
         self._can_tries = 0
@@ -146,6 +148,12 @@ class _State:
         self._reset_counts()
 
     # -- declared here, defined in another part --------------------------------------
+
+    def _transmit_off(self, reason: str) -> None:
+        raise NotImplementedError  # defined in another part of Session
+
+    def _transmit_off_reason(self) -> Optional[str]:
+        raise NotImplementedError  # defined in another part of Session
 
     def _get(self, key: str, default: Any) -> Any:
         raise NotImplementedError  # defined in another part of Session

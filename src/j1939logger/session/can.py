@@ -233,15 +233,38 @@ class _CanPart(_State):
             self.diag.log(
                 "error", "session", f"{where}: " + traceback.format_exc().replace("\n", " | ")
             )
-            reason = f"unexpected error: {type(exc).__name__} in {where}"
-            if self.transmit is not None:
-                self.transmit.disable(reason)
-            else:
-                self._log(Record("fault", "high", None, None, {
-                    "cause": f"transmit turned off: {reason}",
-                    "logger_action": "listen-only for the rest of the session",
-                }))  # fmt: skip
+            self._transmit_off(f"unexpected error: {type(exc).__name__} in {where}")
             return None
+
+    def _transmit_off(self, reason: str) -> None:
+        """Turn transmit off for the session, even if ``transmit.disable`` itself fails (NP-18).
+
+        ``transmit.disable`` writes the high fault. If it raises, or there is no
+        ``transmit``, the session writes the fault itself, keeps its own off reason
+        and makes no more calls into ``address``, ``requests`` or ``transmit``;
+        nothing escapes, and receiving, detection and logging go on.
+        """
+        if self.transmit is not None:
+            try:
+                self.transmit.disable(reason)
+                return
+            except Exception:  # NP-18: an error while turning transmit off
+                self.diag.log(
+                    "error", "session",
+                    "transmit.disable: " + traceback.format_exc().replace("\n", " | "),
+                )  # fmt: skip
+        self._tx_failed = True
+        self._tx_off_reason = reason
+        self._log(Record("fault", "high", None, None, {
+            "cause": f"transmit turned off: {reason}",
+            "logger_action": "listen-only for the rest of the session",
+        }))  # fmt: skip
+
+    def _transmit_off_reason(self) -> Optional[str]:
+        """Why transmit is off this session, or None while it may still send."""
+        if self._tx_off_reason is not None:
+            return self._tx_off_reason
+        return self.transmit.off_reason if self.transmit is not None else None
 
     def _submit(self, sends: Iterable[tuple[TxRequest, int]]) -> None:
         if self.transmit is None:

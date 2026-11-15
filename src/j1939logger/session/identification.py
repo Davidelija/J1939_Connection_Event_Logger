@@ -125,8 +125,8 @@ class _IdentificationPart(_State):
         """No sweep can be sent this session: no bit rate yet, transmit off, or claim lost."""
         if self._guard_holds or (self.address is not None and self.address.lost):
             return True
-        if self.transmit is not None and self.transmit.off_reason is not None:
-            return True  # bus-off, error-passive or a breach (NP-3, NP-18)
+        if self._transmit_off_reason() is not None:
+            return True  # bus-off, error-passive, a breach or an unexpected error (NP-3, NP-18)
         wait_s = float(self._settings["detection.first_sweep_wait_s"])
         return self._bitrate is None and now - self._open_mono >= wait_s
 

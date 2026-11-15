@@ -89,8 +89,8 @@ class _CardPart(_State):
             pct = None
         reading = self.clock.now()
         transmit = "on"
-        if self.transmit is not None and self.transmit.off_reason is not None:
-            transmit = f"off: {self.transmit.off_reason}"
+        if self._transmit_off_reason() is not None:
+            transmit = f"off: {self._transmit_off_reason()}"
         elif self._guard_holds:
             transmit = "off: restart loop"
         retrieved = sorted({Path(f).name.split("_", 1)[0] for f in self._retrieved
