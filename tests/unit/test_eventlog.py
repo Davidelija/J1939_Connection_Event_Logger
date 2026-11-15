@@ -144,6 +144,40 @@ def test_LOG_22_storage_error_gives_high_fault_and_keeps_the_chain(tmp_path: Pat
     verify(lines(path), ZERO_HASH)
 
 
+def test_LOG_22_repeated_storage_error_is_one_fault_with_a_count(tmp_path: Path) -> None:
+    log, fc, path = setup(tmp_path, [(101.0, "eio", {"ops": ["card_write"], "for_s": 2.0})])
+    log.append(conn_start(START))
+    fc.advance(1.0)  # the card fails writes for 2 s
+    for _ in range(3):
+        assert log.append(conn_start(START)) is None  # three records lost
+    [fault] = log.take_faults()  # one fault for the outage, not three (CLAUDE.md rule 14)
+    assert log.append(fault) is None  # the fault itself cannot be written yet ...
+    [again] = log.take_faults()
+    assert again is fault  # ... so the same record is handed out again, not a new one
+    fc.advance(2.0)  # the card is back
+    assert log.append(fault) is not None
+    assert log.take_faults() == []
+    written = lines(path)[-1]
+    assert (written["type"], written["sev"], written["cause"]) == (
+        "fault",
+        "high",
+        "storage error (eio)",
+    )
+    assert written["logger_action"] == "3 records not written; recording continues"
+    verify(lines(path), ZERO_HASH)
+
+
+def test_LOG_22_a_single_storage_error_says_record_not_written(tmp_path: Path) -> None:
+    log, fc, path = setup(tmp_path, [(101.0, "enospc", {"for_s": 1.0})])
+    log.append(conn_start(START))
+    fc.advance(1.0)
+    assert log.append(conn_start(START)) is None
+    [fault] = log.take_faults()
+    fc.advance(1.0)
+    assert log.append(fault) is not None
+    assert lines(path)[-1]["logger_action"] == "record not written"
+
+
 def test_LOG_22_card_removed_then_reinserted_reopens_the_file(tmp_path: Path) -> None:
     log, fc, path = setup(tmp_path, [(101.0, "card_removed", {"for_s": 1.0})])
     log.append(conn_start(START))

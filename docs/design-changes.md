@@ -33,7 +33,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-26 — At `train start`, ask VIN and identity again, as a bounded exception to NP-14  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `qc-fixes-3` (QC finding R1: NP-12 and NP-13 disagree with NP-14)
-- **Decided by:** Vaughan Lynn, 2026-11-14 (option (a) accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-14 (option (a) accepted in the Claude Code session; recorded by Claude Code; confirmed by Vaughan Lynn and Elijah Umaru, 2026-11-14, in the PR #36 review, as reported by Vaughan Lynn in the Claude Code session)
 - **The conflict:** NP-12 asks for VIN "at every session start and during training"; NP-13 asks for identity "from every device during training". NP-14 says a failed request is not repeated in the session, and `requests` also asks each (PGN, destination) only once per session. Training starts mid-session (`train start`), so today:
   - VIN is not requested again at `train start`; only the session-start request counts.
   - A device already on the bus when training starts is asked for identity only if its NAME was unknown when it connected. On a retrain, the known ECUs are never asked, so the new inventory has no self-reported identity for them (TRN-7).

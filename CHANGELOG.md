@@ -71,3 +71,6 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - CI: a nightly job runs `tests/malformed` with a random Hypothesis seed; `tests/malformed/regressions/` holds saved failing examples, replayed in every CI run.
 - `docs/verification.md`: NP-19 marked partial; results filled for TRN-2, TRN-5, TRN-7, TRN-13, IDN-2, LOG-1, LOG-13 and LAP-14; NP-14 and STS-19 tests named in full.
 - DC-26 (NP-12, NP-13, NP-14): at `train start` the logger asks VIN and identity again from every device present; a request that already replied is reused, one that failed is asked once more and never again in the session. `requests` v2 adds `training_start(present)`.
+- Rule 14: a storage outage is reported by one `fault` record, handed out again until it is written; records lost meanwhile are counted in its `logger_action` ("N records not written; recording continues"). Before, every failed attempt to write the fault raised another one.
+- DC-26: a test that identity replies received before `train start` are reused in training and not asked again.
+- Review record: DC-26 and the R2 start-up card check reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); DC-26 confirmed.
