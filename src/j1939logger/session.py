@@ -48,11 +48,12 @@ import json
 import queue
 import re
 import threading
+import traceback
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional, Union
 
 from j1939logger.address import Address
 from j1939logger.admin import RESTART_EXIT, DiagLog, reset_record
@@ -197,12 +198,15 @@ def card_files(card: Path) -> list[dict[str, Any]]:
         for p in sorted(folder.iterdir()):
             if not p.is_file():
                 continue
+            digest, size = hashlib.sha256(), 0
             try:
-                data = p.read_bytes()
+                with open(p, "rb") as fh:  # in chunks: the Beacon has little RAM
+                    for chunk in iter(lambda: fh.read(HASH_CHUNK), b""):
+                        digest.update(chunk)
+                        size += len(chunk)
             except OSError:
                 continue
-            out.append({"path": f"{sub}/{p.name}", "size": len(data),
-                        "sha256": hashlib.sha256(data).hexdigest()})  # fmt: skip
+            out.append({"path": f"{sub}/{p.name}", "size": size, "sha256": digest.hexdigest()})
     return out
 
 
@@ -222,6 +226,10 @@ class _Ident:
 
 
 APPROVED = "external device (approved)"
+CAN_LOST = ("can_missing", "can_down")
+HASH_CHUNK = 1024 * 1024
+CAN_RETRY_FIRST_S = 1.0
+CAN_RETRY_MAX_S = 30.0
 IDENTITY_REQUESTS = 3  # Component ID, Software ID, ECU ID (NP-13)
 
 
@@ -241,7 +249,8 @@ class Session:
         self._inventory_addresses = tuple(a for e in entries for a in e.addresses)
         self._inventory_vin = inventory.vin if inventory is not None else None
         self._versions = dict(versions or {})
-        self._startup_faults = list(startup_faults or [])
+        # A cause, or (cause, logger action); a bare cause is written as "running untrained".
+        self._startup_faults: list[Union[str, tuple[str, str]]] = list(startup_faults or [])
         name = settings.get("address.name", "0x9FFEFFFFFFE00001")
         self._logger_name = int(name, 16) if isinstance(name, str) else int(name)
         self.clock = Clock(platform, float(settings["clock.max_skew_min"]))
@@ -277,6 +286,13 @@ class Session:
         self._proposal: Optional[dict[str, Any]] = None
         self._dropped = False  # inventory dropped for the session (VIN mismatch, training)
         self._vin_received: Optional[str] = None
+        self._tx_failed = False  # an unexpected error in the transmit or request code (NP-18)
+        self._can_down_since: Optional[float] = None
+        self._can_retry_at = 0.0
+        self._can_tries = 0
+        self._can_kind = "can_missing"
+        self._can_fault_written = False
+        self._drops_reported = False
         self.status = Status(platform, settings)
         self._unreviewed: list[str] = []  # high events not yet cleared (STS-2, DC-21)
         self._retrieved: list[str] = []  # files the laptop has retrieved (LOG-11)
@@ -330,10 +346,79 @@ class Session:
     # -- lifecycle --------------------------------------------------------------
 
     def start(self) -> None:
-        """Power-on: load the device library, open capture listen-only and the first session."""
+        """Power-on: load the device library, open capture listen-only and the first session.
+
+        A missing CAN interface does not stop the logger: capture is retried with
+        backoff and the first session opens on the first frame (errors.md can_missing).
+        """
         self._load_library()
-        self.capture.start(listen_only=True)
+        try:
+            self.capture.start(listen_only=True)
+        except PlatformError as exc:
+            if exc.kind not in CAN_LOST:
+                raise
+            self._can_lost(exc)
+            return
         self._open_session(wake="power-on")
+
+    # -- CAN interface missing or down (errors.md can_missing, can_down) -------------
+
+    def _kernel_drops(self) -> None:
+        """A notice fault the first time the kernel drops frames in a session (rx_overflow)."""
+        if self.eventlog is None or self._drops_reported:
+            return
+        drops = self.capture.stats().kernel_drops
+        if drops > 0:
+            self._drops_reported = True  # once per session; the count is in session_end
+            self._log(Record("fault", "notice", None, None, {
+                "cause": f"the kernel dropped {drops} received frames (SO_RXQ_OVFL)",
+                "logger_action": "continued; the total is in session_end",
+            }))  # fmt: skip
+
+    def _can_lost(self, exc: PlatformError) -> None:
+        now = self.clock.mono()
+        if self._can_down_since is None:
+            self._can_down_since, self._can_tries = now, 0
+            self._can_kind = exc.kind
+            self.diag.log("error", "capture", f"CAN interface {exc.kind}: {exc}")
+        self._can_tries += 1
+        delay = min(CAN_RETRY_MAX_S, CAN_RETRY_FIRST_S * 2 ** (self._can_tries - 1))
+        self._can_retry_at = now + delay
+
+    def _retry_can(self) -> None:
+        """Try to reopen the CAN socket when the backoff has passed; one fault with a count."""
+        if self._can_down_since is None:
+            return
+        now = self.clock.mono()
+        waited = now - self._can_down_since
+        if not self._can_fault_written and waited >= float(self._get("can.bitrate_fault_s", 60)):
+            self._can_fault_written = True
+            self._can_fault(waited)
+        if now < self._can_retry_at:
+            return
+        try:
+            self.capture.stop()
+            self.capture.start(listen_only=self._bitrate is None or self._guard_holds)
+        except PlatformError as exc:
+            if exc.kind not in CAN_LOST:
+                raise
+            self._can_lost(exc)
+            return
+        self.diag.log("info", "capture", f"CAN interface back after {waited:.0f} s, "
+                                         f"{self._can_tries} tries")  # fmt: skip
+        self._can_down_since = None
+        self._can_fault_written = False
+
+    def _can_fault(self, waited: float) -> None:
+        cause = (f"CAN interface {'missing' if self._can_kind == 'can_missing' else 'down'} "
+                 f"for {waited:.0f} s ({self._can_tries} tries)")  # fmt: skip
+        action = "retrying with backoff; recording resumes when it returns"
+        if self.eventlog is not None:
+            self._log(
+                Record("fault", "high", None, None, {"cause": cause, "logger_action": action})
+            )
+        else:
+            self._startup_faults.append((cause, action))  # written in the next session
 
     def _load_library(self) -> None:
         """The newest device library on the card (IDN-5); a corrupt one is a high fault (DC-19)."""
@@ -403,7 +488,16 @@ class Session:
     def step(self, max_n: int = 1000) -> int:
         """Process the frames already received and the session timers; returns frame count."""
         self._platform.watchdog_kick()
-        frames = self.capture.read_batch(max_n)
+        self._retry_can()
+        frames: list[Frame] = []
+        if self._can_down_since is None:
+            try:
+                frames = self.capture.read_batch(max_n)
+            except PlatformError as exc:
+                if exc.kind not in CAN_LOST:
+                    raise
+                self._can_lost(exc)  # keep the session; retry the socket (errors.md can_down)
+        self._kernel_drops()
         if frames and self.eventlog is None:
             self._open_session(wake="CAN activity")
         if self.eventlog is not None:
@@ -434,12 +528,14 @@ class Session:
             if self._guard_holds:
                 return  # NP-19: listen-only with transmit off
             assert self.transmit is not None and self.address is not None
-            self.transmit.enable(self.capture.transmit_handle())
-            self._submit(self.address.start())
-            self._claim_sent_mono = self.clock.mono()
             assert self.requests is not None
-            self.requests.session_start()
-            self.transmit.pump()
+            tx, address, requests = self.transmit, self.address, self.requests
+            self._tx_call("transmit.enable", lambda: tx.enable(self.capture.transmit_handle()))
+            sends = self._tx_call("address.start", address.start)
+            self._submit(sends or [])
+            self._claim_sent_mono = self.clock.mono()
+            self._tx_call("requests.session_start", requests.session_start)
+            self._tx_call("transmit.pump", tx.pump)
             return
         waited = self.clock.mono() - self._open_mono
         if not self._bitrate_fault_logged and waited >= float(self._get("can.bitrate_fault_s", 60)):
@@ -457,28 +553,65 @@ class Session:
                 )
             )
 
+    def _tx_call(self, where: str, fn: Callable[[], Any]) -> Any:
+        """Run one call into ``address``, ``requests`` or ``transmit`` (NP-18).
+
+        Any unexpected error turns transmit off for the session with a high fault
+        (``transmit.disable``), puts the traceback in the diagnostic log, and stops
+        further calls into those modules; receiving, detection and logging go on.
+        """
+        if self._tx_failed:
+            return None
+        try:
+            return fn()
+        except Exception as exc:  # NP-18: "any unexpected error" in the transmit or request code
+            self._tx_failed = True
+            self.diag.log(
+                "error", "session", f"{where}: " + traceback.format_exc().replace("\n", " | ")
+            )
+            reason = f"unexpected error: {type(exc).__name__} in {where}"
+            if self.transmit is not None:
+                self.transmit.disable(reason)
+            else:
+                self._log(Record("fault", "high", None, None, {
+                    "cause": f"transmit turned off: {reason}",
+                    "logger_action": "listen-only for the rest of the session",
+                }))  # fmt: skip
+            return None
+
     def _submit(self, sends: Iterable[tuple[TxRequest, int]]) -> None:
         if self.transmit is None:
             return
-        for req, sa in sends:
-            self.transmit.submit(req, sa)
-        if self.address is not None:
-            self.transmit.set_source(self.address.current)
+        tx = self.transmit
+
+        def send_all() -> None:
+            for req, sa in sends:
+                tx.submit(req, sa)
+            if self.address is not None:
+                tx.set_source(self.address.current)
+
+        self._tx_call("transmit.submit", send_all)
 
     def _run_requests(self) -> None:
         if self.transmit is None or self.requests is None or not self.transmit.enabled:
             return
-        if self.logger_sa is not None:
-            for req in self.requests.poll():
-                self.transmit.submit(req, self.logger_sa)
-        self.transmit.pump()
+        tx, requests = self.transmit, self.requests
+
+        def run() -> None:
+            if self.logger_sa is not None:
+                for req in requests.poll():
+                    tx.submit(req, self.logger_sa)
+            tx.pump()
+
+        self._tx_call("requests.poll", run)
 
     def _collect(self) -> None:
         """Records and outcomes from address, requests and transmit."""
         if self.requests is not None:
-            for record in self.requests.take_records():
+            requests = self.requests
+            for record in self._tx_call("requests.take_records", requests.take_records) or []:
                 self._log(record)
-            for outcome in self.requests.take_outcomes():
+            for outcome in self._tx_call("requests.take_outcomes", requests.take_outcomes) or []:
                 if outcome.pgn == PGN_VIN and outcome.conn is None:
                     check = self._vin_check(outcome)
                     self._log(check)
@@ -550,12 +683,16 @@ class Session:
     def _on_message(self, msg: J1939Msg) -> None:
         assert self.detect is not None
         if self.address is not None:
-            sends, records = self.address.on_message(msg)
-            self._submit(sends)
-            for record in records:
-                self._log(record, msg.ts_mono)
+            address = self.address
+            got = self._tx_call("address.on_message", lambda: address.on_message(msg))
+            if got is not None:
+                sends, records = got
+                self._submit(sends)
+                for record in records:
+                    self._log(record, msg.ts_mono)
         if self.requests is not None:
-            self.requests.on_message(msg, self.logger_sa)
+            requests = self.requests
+            self._tx_call("requests.on_message", lambda: requests.on_message(msg, self.logger_sa))
         for record in self.clock.on_time_date(msg) + self.detect.on_message(msg, self.logger_sa):
             self._log_detection(record, msg.ts_mono)
         if self.monitor is not None:  # after detect, so a new connection is already open
@@ -589,7 +726,8 @@ class Session:
             value = int(name, 16) if isinstance(name, str) else None
             if self._dropped:
                 value = None  # ask every device (NP-13 during training; DET-14 untrained)
-            self.requests.identify(record.conn, int(record.fields["sa"]), value)
+            requests, conn_id, sa = self.requests, record.conn, int(record.fields["sa"])
+            self._tx_call("requests.identify", lambda: requests.identify(conn_id, sa, value))
 
     @property
     def _untrained(self) -> bool:
@@ -1558,6 +1696,7 @@ class Session:
         self._end_sets = {}
         self._high_fault = None
         self._vin_status = None
+        self._tx_failed = False
         self._dropped = False
         self._vin_received = None
         self.rawcap = RawCap(self._platform, self._settings, session)
@@ -1588,17 +1727,12 @@ class Session:
                     "fault", "notice", None, None, {"cause": message, "logger_action": "continued"}
                 )
             )
-        for message in self._startup_faults:
-            self._log(
-                Record(
-                    "fault",
-                    "high",
-                    None,
-                    None,
-                    {"cause": message, "logger_action": "running untrained"},
-                )
-            )
+        for item in self._startup_faults:
+            message, action = item if isinstance(item, tuple) else (item, "running untrained")
+            self._log(Record("fault", "high", None, None,
+                             {"cause": message, "logger_action": action}))  # fmt: skip
         self._startup_faults = []
+        self._drops_reported = False
         if self._library_fault is not None:
             self._log(
                 Record(

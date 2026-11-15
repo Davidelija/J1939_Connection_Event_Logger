@@ -22,7 +22,9 @@ session (rule 4); ``enable()`` after ``disable()`` is refused.
 Limits (NP-16, NP-6, DC-12):
 
 * at most ``transmit.max_frames_per_s`` frames in any sliding 1 s window,
-  every frame counted; a frame over the cap waits in the queue;
+  every frame counted; a frame over the cap waits in the queue; the value is
+  clamped to ``RELEASE_MAX_FPS`` (10), and ``RELEASE_MAX_OUTSTANDING`` (1)
+  likewise clamps the next limit, so no setting can raise the cap;
 * protocol frames go ahead of queued requests;
 * at most ``transmit.max_outstanding_per_dest`` requests outstanding per
   destination (global requests count as destination 255); ``requests`` calls
@@ -54,6 +56,8 @@ __all__ = [
     "SendHandle",
     "RELEASE_TRANSMIT_ALLOW",
     "RELEASE_REQUEST_ALLOW",
+    "RELEASE_MAX_FPS",
+    "RELEASE_MAX_OUTSTANDING",
     "PGN_REQUEST",
     "PGN_CLAIM",
     "PGN_ACK",
@@ -65,6 +69,10 @@ __all__ = [
 # never widen them; widening needs a software release (CLAUDE.md rule 4).
 RELEASE_TRANSMIT_ALLOW = frozenset({59904, 60928, 59392, 60416})
 RELEASE_REQUEST_ALLOW = frozenset({60928, 65254, 65260, 65259, 65242, 64965})
+# The rate cap this release may use (NP-16). Configuration can lower it, never
+# raise it (CLAUDE.md rule 4); transmit clamps to it as well as config refusing it.
+RELEASE_MAX_FPS = 10
+RELEASE_MAX_OUTSTANDING = 1
 
 PGN_REQUEST = 59904
 PGN_CLAIM = 60928
@@ -126,8 +134,11 @@ class Transmit:
         # Configuration can narrow the allow-lists, never widen them (rule 4).
         self._allow = frozenset(settings["transmit.allow_list"]) & RELEASE_TRANSMIT_ALLOW
         self._request_allow = frozenset(settings["requests.allow_list"]) & RELEASE_REQUEST_ALLOW
-        self._max_fps = int(settings["transmit.max_frames_per_s"])
-        self._max_out = int(settings["transmit.max_outstanding_per_dest"])
+        # Clamped to the release cap whatever the settings say (NP-16, rule 4).
+        self._max_fps = min(int(settings["transmit.max_frames_per_s"]), RELEASE_MAX_FPS)
+        self._max_out = min(
+            int(settings["transmit.max_outstanding_per_dest"]), RELEASE_MAX_OUTSTANDING
+        )
         self._claim_wait_s = float(settings.get("address.claim_wait_ms", 250)) / 1000.0
         self._name_bytes = logger_name.to_bytes(8, "little")
         self._handle: Optional[SendHandle] = None

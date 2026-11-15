@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional
 
-from j1939logger.cmdserver import CmdServer
+from j1939logger.cmdserver import CmdServer, check_path
 from j1939logger.config import (
     Config,
     ConfigError,
@@ -93,7 +93,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     settings = dict(cfg.values)
     inventory: Optional[Inventory] = None
-    startup_faults = []
+    startup_faults: list[Any] = []
     try:
         inv_data = _newest(store, "inventory")
         if inv_data is None and args.inventory is not None:
@@ -104,6 +104,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except (OSError, ValueError) as exc:
         # A corrupt inventory runs the logger untrained with a high fault (STS-19).
         startup_faults.append(f"inventory corrupt ({exc}); running untrained")
+    if args.socket is not None:
+        problem = check_path(args.socket)
+        if problem is not None:  # a clear startup fault, not a crash (QC-1)
+            print(f"command socket not started: {problem}", file=sys.stderr)
+            startup_faults.append(
+                (f"command socket not started: {problem}",
+                 "laptop commands unavailable; recording continues")
+            )  # fmt: skip
+            args.socket = None
     versions = {
         "config": cfg.version,
         "inventory": inventory.version if inventory is not None else None,

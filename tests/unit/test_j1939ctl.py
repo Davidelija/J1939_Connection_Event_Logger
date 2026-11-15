@@ -271,7 +271,8 @@ def test_LAP_5_retrieve_copies_new_files_checks_the_chain_and_tells_the_logger(
     assert "Chain check: verified (open session in progress)" in text
     held = sorted(p.name for p in (folder / "sessions").iterdir())
     assert held and held[0].startswith("s000001_")
-    assert not os.access(folder / "sessions" / held[0], os.W_OK)  # read-only
+    mode = os.stat(folder / "sessions" / held[0]).st_mode
+    assert not mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)  # read-only, even for root
     assert (folder / "inventory" / "inv-v2.json").exists()  # for inventory show offline
     assert any(r["type"] == "retrieval" and r["chain_verified"] for r in records(s))
     run_bus(s, fc, 1.0, 0)
@@ -372,3 +373,31 @@ def test_LAP_8_each_header_lists_the_installed_operator_key_fingerprints(tmp_pat
     (keys / "jdoe.pub").write_text(f"ssh-ed25519 {blob} jdoe@laptop\n", "ascii")
     (keys / "notes.pub").write_text("not a key\n", "ascii")
     assert operator_key_fingerprints(keys) == [fingerprint(f"publickey ssh-ed25519 {blob}")]
+
+
+# -- errors.md ssh_*, cannot_connect (QC-1) --------------------------------------------------
+
+
+def test_LAP_15_ssh_failures_say_why_and_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from j1939ctl import transport
+
+    def failing(args: Any, **kw: Any) -> Any:
+        return subprocess.CompletedProcess(args, 255, stdout="",
+                                           stderr="Host key verification failed.")  # fmt: skip
+
+    monkeypatch.setattr(subprocess, "run", failing)
+    reply, code = transport.SshTransport("192.168.250.1", "/media/card").call("status")
+    assert code == 3 and "Host key verification failed." in reply["error"]
+    assert "Ethernet cable" in reply["next"]
+
+    def missing(args: Any, **kw: Any) -> Any:
+        raise FileNotFoundError("ssh")
+
+    monkeypatch.setattr(subprocess, "run", missing)
+    reply, code = transport.SshTransport("192.168.250.1", "/media/card").call("status")
+    assert code == 3 and reply["error"].startswith("cannot reach the logger")
+    out = io.StringIO()
+    assert main(["status"], transport=transport.SshTransport("h", "/c"), out=out) == 3
+    assert "Next step:" in out.getvalue()

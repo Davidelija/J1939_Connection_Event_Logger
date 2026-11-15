@@ -112,3 +112,14 @@ def test_DC_2_merged_line_is_required(tmp_path: Path) -> None:
 
 def test_DC_2_repository_matrix_passes_staged_check() -> None:
     assert cv.main([]) == 0
+
+
+def test_DC_2_staged_mode_fails_on_an_errors_md_placeholder_for_a_merged_step(
+    tmp_path: Path,
+) -> None:
+    row = "| a | b | `can_missing` | d | e | f | g | h | NP-17 | {} | do this |\n"
+    (tmp_path / "errors.md").write_text(row.format("`test_x`; retry *(step 2)*"), "utf-8")
+    assert _run(tmp_path, "1", "") == 0  # step 2 has not merged: still allowed
+    assert _run(tmp_path, "1, 2", "") == 1  # merged: the placeholder fails
+    (tmp_path / "errors.md").write_text(row.format("`test_x`; systemd *(step 8)*"), "utf-8")
+    assert _run(tmp_path, "1, 2", "") == 0  # a later step is fine

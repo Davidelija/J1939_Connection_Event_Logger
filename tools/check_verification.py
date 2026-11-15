@@ -17,7 +17,8 @@ Modes:
     "pass"), a procedure with a result, or a recorded gap (Where "not
     verified", or Result "not supported ..." with the reason). Also fails
     while any ``docs/errors.md`` row still has a placeholder in its Test
-    column (docs/handoff.md, Testing).
+    column (docs/handoff.md, Testing). Staged mode also fails while a row's Test
+    column still waits on a step that has merged (``*(step N)*``).
 
 Merged steps come from the ``**Merged build steps:**`` line in
 docs/verification.md (``none`` or a comma-separated list such as ``1, 2``),
@@ -152,6 +153,24 @@ def _gap(row: Row) -> bool:
     )
 
 
+STEP_PLACEHOLDER = re.compile(r"\(step ([0-9]+[a-z]?)\b[^)]*\)")
+
+
+def check_errors_staged(errors_md: Optional[str], merged: set[str]) -> list[str]:
+    """docs/errors.md rows whose Test column still waits on a step that has merged."""
+    out: list[str] = []
+    for n, line in enumerate((errors_md or "").splitlines(), 1):
+        cells = _cells(line) if line.startswith("|") else []
+        if len(cells) >= 10 and cells[2].startswith("`"):
+            due = sorted({m.group(1) for m in STEP_PLACEHOLDER.finditer(cells[9])} & merged)
+            if due:
+                out.append(
+                    f"docs/errors.md line {n} ({cells[2]}): Test column waits on merged "
+                    f"step {', '.join(due)}"
+                )
+    return out
+
+
 def check_release(rows: Sequence[Row], tests: set[str], errors_md: Optional[str]) -> list[str]:
     errors = []
     for row in rows:
@@ -196,6 +215,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else parse_merged(text)
         )
         errors = check_staged(rows, merged, tests)
+        errors_md = args.errors.read_text(encoding="utf-8") if args.errors.exists() else None
+        errors += check_errors_staged(errors_md, merged)
         label = f"staged (merged steps: {', '.join(sorted(merged)) or 'none'})"
     else:
         errors_md = args.errors.read_text(encoding="utf-8") if args.errors.exists() else None
