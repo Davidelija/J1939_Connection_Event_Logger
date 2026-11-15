@@ -74,3 +74,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - Rule 14: a storage outage is reported by one `fault` record, handed out again until it is written; records lost meanwhile are counted in its `logger_action` ("N records not written; recording continues"). Before, every failed attempt to write the fault raised another one.
 - DC-26: a test that identity replies received before `train start` are reused in training and not asked again.
 - Review record: DC-26 and the R2 start-up card check reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); DC-26 confirmed.
+- Review record: PR #37 (one fault per storage outage; the DC-26 reuse test) reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14).
