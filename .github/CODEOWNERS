@@ -3,4 +3,10 @@
 /src/j1939logger/config.py     @vaughan2017 @Davidelija
 /src/j1939logger/eventlog.py   @vaughan2017 @Davidelija
 /src/j1939logger/platform/     @vaughan2017 @Davidelija
+# The transmit decisions in session, listen-only mode and the send handle, the rule 4 checks (DC-25)
+/src/j1939logger/session/can.py   @vaughan2017 @Davidelija
+/src/j1939logger/session/core.py  @vaughan2017 @Davidelija
+/src/j1939logger/capture.py       @vaughan2017 @Davidelija
+/tests/contract/                  @vaughan2017 @Davidelija
+/.github/CODEOWNERS               @vaughan2017 @Davidelija
 /docs/                         @vaughan2017 @Davidelija

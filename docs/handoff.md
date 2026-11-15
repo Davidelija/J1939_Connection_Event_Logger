@@ -257,7 +257,7 @@ j1939-logger/
   demo/
     run_demo.sh              no-hardware demo on vcan0; also the CI smoke test
   .github/pull_request_template.md   definition of done and the state block
-  .github/CODEOWNERS         human review for transmit, config, eventlog, platform, docs
+  .github/CODEOWNERS         human review for the safety-critical paths (modules.md section 2, DC-25) and docs
   .github/workflows/ci.yml   vcan0 tests, ruff, mypy, coverage, demo, verification check
   release/
     install.sh               offline install; checks ext4, raises rmem_max, hardening

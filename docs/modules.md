@@ -104,7 +104,7 @@ Modules may only call modules in the same layer or below. Nothing imports `main`
 | 1. Services | `capture`, `transmit`, `eventlog`, `store`, `rawcap`, `clock` | The only modules that touch sockets or files, apart from `platform` |
 | 0. Hardware | `platform` | The only hardware- or Beacon-specific code (rule 12) |
 
-Safety-critical paths (`transmit`, allow-list validation in `config`, hashing in `eventlog`, and `platform`) need a review by Vaughan Lynn or Elijah Umaru on every change (`.github/CODEOWNERS`), not only CI.
+Safety-critical paths need a review by Vaughan Lynn or Elijah Umaru on every change (`.github/CODEOWNERS`), not only CI: `transmit.py`; allow-list validation in `config.py`; hashing in `eventlog.py`; `platform/`; the transmit decisions in `session/can.py` and `session/core.py` (bit rate and normal mode, turning transmit on, the NP-18 guard, NP-3, the NP-19 restart guard); `capture.py` (listen-only mode and the send handle); `tests/contract/` (the rule 4 checks); and `.github/CODEOWNERS` itself (DC-25). Paths under `src/j1939logger/` are given relative to it. A contract test checks that CODEOWNERS covers every path named here.
 
 Ownership rules that the layering enforces:
 - Only `transmit` sends on the bus (rule 4).
