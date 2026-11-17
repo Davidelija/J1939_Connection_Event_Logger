@@ -76,3 +76,6 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - Review record: DC-26 and the R2 start-up card check reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); DC-26 confirmed.
 - Review record: PR #37 (one fault per storage outage; the DC-26 reuse test) reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14).
 - Review record: the rest of QC-3 (U1 to U5, R3, R4, the verification results) reviewed by Vaughan Lynn and Elijah Umaru (2026-11-14); the whole of PR #36 is now on record.
+- `docs/test-writers-brief.md`: a hand-off brief for the test-script writers (levels 2 and 3): what exists, what is missing in order, coverage by case, conventions.
+- User manual: the device library source path is `src/j1939logger/data/device_library.json`, created in step 8; the stale "(step 5)" note is gone.
+- Review record: the build-step rows for steps 1 to 7 and DC-22 recorded as reviewed by Vaughan Lynn and Elijah Umaru (reported 2026-11-16).
