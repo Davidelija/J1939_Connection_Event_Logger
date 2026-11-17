@@ -92,3 +92,5 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - Desktop platform: a receive fault marks the feed stalled, so `feed()` returns at once instead of waiting while capture is stopped.
 - Review record: PRs #40 and #41 approved by Vaughan Lynn (2026-11-17).
 - DC-28: `bench/checklists.md` now says one observer (Vaughan Lynn or Elijah Umaru) is enough for a checklist item.
+- `docs/test-bench.md`: the hardware test bench in one place: the two setups (full rig, X20 minimum), equipment, wiring and termination rules, software, safety, evidence, and what is still open.
+- `docs/step-2a-run-sheet.md` became `docs/step-2a-procedure.md`, a detailed procedure someone new can run: prerequisites, evidence conventions, the order of the day, each check with exact commands, pass condition and fallback (A8 now brings `can0` down first; A3 checks Beacon 2's error counters; B3 needs no architecture-specific wheel), and a results sheet.
