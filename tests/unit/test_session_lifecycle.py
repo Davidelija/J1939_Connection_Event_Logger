@@ -6,10 +6,11 @@ import json
 import os
 import socket
 import time
+import weakref
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -22,25 +23,18 @@ EXAMPLES = Path(__file__).resolve().parents[2] / "docs" / "examples"
 START = datetime(2026, 11, 6, 14, 2, 11, tzinfo=timezone.utc)
 
 
-class _IdleSocket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 21
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)  # like a real socket timeout, without spinning the CPU
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class _NoBus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _IdleSocket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
 
 def settings(**overrides: Any) -> dict[str, Any]:
@@ -59,7 +53,9 @@ def make(
     fc = fc or FakeClock(start_utc=START, start_mono=100.0)
     p = _NoBus(fault_plan=plan, clock=fc, root=root)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
-    return Session(p, settings(**(overrides or {})), None, versions, startup_faults), fc, p
+    s = Session(p, settings(**(overrides or {})), None, versions, startup_faults)
+    _BUS[s] = p
+    return s, fc, p
 
 
 def eec1(t: float) -> Frame:
@@ -69,7 +65,7 @@ def eec1(t: float) -> Frame:
 def feed(s: Session, fc: FakeClock, seconds: float, every: float = 1.0) -> None:
     end = fc.mono() + seconds
     while fc.mono() < end:
-        s.capture._ingest(eec1(fc.mono()))
+        put(s, eec1(fc.mono()))
         s.step()
         fc.advance(every)
 
@@ -131,11 +127,11 @@ def test_LOG_6_session_start_header_has_every_field(tmp_path: Path) -> None:
 def test_LOG_15_header_and_end_carry_buffer_size_and_kernel_drops(tmp_path: Path) -> None:
     s, fc, _ = make(tmp_path)
     s.start()
-    s.capture._ingest(eec1(fc.mono()), drops=4)
+    put(s, eec1(fc.mono()), drops=4)
     s.step()
     stop(s)
     r = all_records(tmp_path)
-    assert r[0]["rx_buffer_actual_bytes"] == 1 << 21
+    assert r[0]["rx_buffer_actual_bytes"] == 1 << 20  # can.rx_buffer_bytes, set and read back
     assert r[-1]["type"] == "session_end" and r[-1]["kernel_drops"] == 4
     assert r[-1]["frames_not_j1939"] == {"std_11bit": 0, "remote": 0, "error": 0}
 
@@ -158,7 +154,7 @@ def test_LOG_17_key_off_after_30_s_silence_then_new_session_on_next_frame(tmp_pa
     assert not s.open
     end = all_records(tmp_path)[-1]
     assert (end["type"], end["reason"]) == ("session_end", "key-off, bus silent")
-    s.capture._ingest(eec1(fc.mono()))
+    put(s, eec1(fc.mono()))
     s.step()
     stop(s)
     files = session_files(tmp_path / "card" / "sessions")
@@ -348,7 +344,7 @@ def test_LOG_22_storage_fault_is_logged_after_the_card_returns(tmp_path: Path) -
     s.start()
     feed(s, fc, 3)  # now at 103.0: the card fails writes for 1 s
     claim = (0x8000810033A1B2C4).to_bytes(8, "little")
-    s.capture._ingest(Frame(1.7e9, fc.mono(), 0x18EEFFF9, True, False, False, claim, False))
+    put(s, Frame(1.7e9, fc.mono(), 0x18EEFFF9, True, False, False, claim, False))
     s.step()  # connection_start cannot be written
     fc.advance(1.5)
     feed(s, fc, 2)  # the card is back: the fault is logged
@@ -421,6 +417,7 @@ def test_NP_17_missing_interface_is_retried_with_backoff_and_logged_once(tmp_pat
     p = _FlakyBus(clock=fc, root=tmp_path)
     versions = {"config": "cfg-v3", "inventory": None, "library": None}
     s = Session(p, settings(), None, versions, None)
+    _BUS[s] = p
     s.start()  # must not raise
     for _ in range(700):  # 70 s without an interface
         s.step()
@@ -430,7 +427,7 @@ def test_NP_17_missing_interface_is_retried_with_backoff_and_logged_once(tmp_pat
     assert max(gaps) <= 30.0 + 0.2
     p.up = True
     for _ in range(400):
-        s.capture._ingest(eec1(fc.mono()))
+        put(s, eec1(fc.mono()))
         s.step()
         fc.advance(0.1)
     stop(s)
@@ -461,9 +458,9 @@ def test_NP_17_interface_down_while_running_keeps_the_session_and_retries(tmp_pa
 def test_LOG_15_kernel_drops_give_one_notice_fault_per_session(tmp_path: Path) -> None:
     s, fc, _ = make(tmp_path)
     s.start()
-    s.capture._ingest(eec1(fc.mono()), drops=4)
+    put(s, eec1(fc.mono()), drops=4)
     s.step()
-    s.capture._ingest(eec1(fc.mono()), drops=9)
+    put(s, eec1(fc.mono()), drops=9)
     s.step()
     stop(s)
     r = all_records(tmp_path)

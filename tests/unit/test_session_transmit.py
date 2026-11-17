@@ -9,10 +9,11 @@ import struct
 import sys
 import threading
 import time
+import weakref
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -33,41 +34,24 @@ ALLOWED_REQUESTS = {60928, 65254, 65260, 65259, 65242, 64965}
 _FRAME = struct.Struct("=IB3x8s")
 
 
-class RecordingSocket:
-    """A CAN socket that records what the logger sends (the witness's view)."""
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def __init__(self, clock: FakeClock, sent: list[tuple[float, int, bytes]]) -> None:
-        self.clock = clock
-        self.sent = sent
 
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
-
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
-
-    def send(self, data: bytes) -> int:
-        cid, dlc, payload = _FRAME.unpack(data)
-        self.sent.append((self.clock.mono(), cid & 0x1FFFFFFF, payload[:dlc]))
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
+    """The feed (DC-27); ``sent`` is the platform's record of what the logger sends."""
+
     def __init__(
         self, sent: list[tuple[float, int, bytes]], rate: Optional[int] = 250000, **kw: Any
     ) -> None:
-        super().__init__(**kw)
-        self.sent = sent
+        super().__init__(feed=True, **kw)
+        self.sent_frames = sent  # (mono, can_id, data): the witness's view
         self.rate = rate
-
-    def open_can(self, listen_only: bool) -> socket.socket:
-        assert self._fake is not None
-        return cast(socket.socket, RecordingSocket(self._fake, self.sent))
 
     def bitrate_check(self) -> Optional[int]:
         return self.rate
@@ -102,6 +86,7 @@ def make(
     p = Bus(sent, rate, fault_plan=plan, clock=fc, root=root)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
     s = Session(p, settings(), inv or inventory(), versions, None)
+    _BUS[s] = p
     return s, fc, sent
 
 
@@ -119,7 +104,7 @@ def run(
     end = fc.mono() + seconds
     while fc.mono() < end:
         if traffic:
-            s.capture._ingest(eec1(fc.mono()))
+            put(s, eec1(fc.mono()))
         s.step()
         fc.advance(step)
 
@@ -257,7 +242,7 @@ def test_NP_3_bus_off_turns_transmit_off_for_the_session(tmp_path: Path) -> None
     s.start()
     run(s, fc, 1.0)
     before = len(sent)
-    s.capture._ingest(frame(0x40, bytes(8), fc.mono(), error=True))
+    put(s, frame(0x40, bytes(8), fc.mono(), error=True))
     run(s, fc, 5.0)
     stop(s)
     assert len(sent) == before
@@ -270,11 +255,11 @@ def test_NP_3_error_passive_from_own_transmit_errors_turns_transmit_off(tmp_path
     s, fc, sent = make(tmp_path)
     s.start()
     run(s, fc, 1.0)
-    s.capture._ingest(frame(0x04, bytes([0, 0x01, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    put(s, frame(0x04, bytes([0, 0x01, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
     run(s, fc, 2.0)  # error-passive on receive only: not our transmit errors, keep going
     assert s.status_state().transmit == "on"
     before = len(sent)
-    s.capture._ingest(frame(0x04, bytes([0, 0x20, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
+    put(s, frame(0x04, bytes([0, 0x20, 0, 0, 0, 0, 0, 0]), fc.mono(), error=True))
     run(s, fc, 5.0)
     assert s.status_state().transmit == "off: error_passive"
     stop(s)
@@ -287,7 +272,7 @@ def test_NP_7_contest_at_247_concedes_and_claims_246(tmp_path: Path) -> None:
     s, fc, sent = make(tmp_path)
     s.start()
     run(s, fc, 1.0)
-    s.capture._ingest(frame(0x18EEFFF7, (ENGINE + 99).to_bytes(8, "little"), fc.mono()))
+    put(s, frame(0x18EEFFF7, (ENGINE + 99).to_bytes(8, "little"), fc.mono()))
     run(s, fc, 1.0)
     stop(s)
     claims = [cid & 0xFF for _, cid, _ in sent if pgn_of(cid) == 60928]
@@ -300,7 +285,7 @@ def test_NP_8_request_to_the_logger_is_nacked(tmp_path: Path) -> None:
     s, fc, sent = make(tmp_path)
     s.start()
     run(s, fc, 1.0)
-    s.capture._ingest(frame(0x18EAF7F9, (65260).to_bytes(3, "little"), fc.mono()))
+    put(s, frame(0x18EAF7F9, (65260).to_bytes(3, "little"), fc.mono()))
     run(s, fc, 0.5)
     stop(s)
     nacks = [(cid, d) for _, cid, d in sent if pgn_of(cid) == 59392]
@@ -313,7 +298,7 @@ def test_NP_12_vin_reply_gives_vin_check_match(tmp_path: Path) -> None:
     run(s, fc, 1.0)  # Time/Date asked; no reply, so VIN follows after the retry
     run(s, fc, 2.5)
     for f in bam_frames(0x00, 65260, (VIN + "*").encode(), fc.mono()):
-        s.capture._ingest(f)
+        put(s, f)
     run(s, fc, 1.0)
     stop(s)
     [check] = [x for x in records(tmp_path) if x["type"] == "vin_check"]
@@ -337,7 +322,7 @@ def test_NP_13_new_device_is_asked_for_its_identity(tmp_path: Path) -> None:
     s, fc, sent = make(tmp_path)
     s.start()
     run(s, fc, 15.0)  # past the wake window
-    s.capture._ingest(frame(0x18EEFFF9, SCAN.to_bytes(8, "little"), fc.mono()))
+    put(s, frame(0x18EEFFF9, SCAN.to_bytes(8, "little"), fc.mono()))
     run(s, fc, 5.0)
     stop(s)
     to_scan = [
@@ -354,7 +339,7 @@ def test_NP_9_rts_to_the_logger_gets_cts(tmp_path: Path) -> None:
     s.start()
     run(s, fc, 1.0)
     rts = bytes([16, 20, 0, 3, 0xFF]) + (65259).to_bytes(3, "little")
-    s.capture._ingest(frame((7 << 26) | (0xEC << 16) | (0xF7 << 8) | 0x00, rts, fc.mono()))
+    put(s, frame((7 << 26) | (0xEC << 16) | (0xF7 << 8) | 0x00, rts, fc.mono()))
     run(s, fc, 0.2)
     stop(s)
     cts = [d for _, cid, d in sent if pgn_of(cid) == 60416]
@@ -366,7 +351,7 @@ def test_NP_16_witness_over_a_busy_minute(tmp_path: Path) -> None:
     s.start()
     for i in range(10):  # ten new devices join at once
         name = (SCAN + i).to_bytes(8, "little")
-        s.capture._ingest(frame(0x18EEFF00 | (0x80 + i), name, fc.mono()))
+        put(s, frame(0x18EEFF00 | (0x80 + i), name, fc.mono()))
     run(s, fc, 60.0)
     stop(s)
     assert len(sent) > 20
@@ -449,7 +434,7 @@ def test_NP_18_unexpected_error_in_requests_turns_transmit_off_and_logging_conti
     run(s, fc, 1.0)  # must not raise out of the session
     assert not s.transmit.enabled and s.transmit.off_reason is not None
     before = len(sent)
-    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    put(s, _claim(SCAN, 249, fc.mono()))
     run(s, fc, 2.0)
     assert len(sent) == before  # nothing more is sent this session
     stop(s)
@@ -469,7 +454,7 @@ def test_NP_18_unexpected_error_in_address_turns_transmit_off_and_logging_contin
     run(s, fc, 1.0)
     assert s.address is not None and s.transmit is not None
     s.address.on_message = _broken  # type: ignore[method-assign]
-    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    put(s, _claim(SCAN, 249, fc.mono()))
     run(s, fc, 2.0)
     assert not s.transmit.enabled
     stop(s)
@@ -490,7 +475,7 @@ def test_NP_18_error_inside_transmit_disable_still_keeps_logging(tmp_path: Path)
     status = s.handle("status")["result"]
     assert status["transmit"] == "off: unexpected error: RuntimeError in requests.poll"
     before = len(sent)
-    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    put(s, _claim(SCAN, 249, fc.mono()))
     run(s, fc, 2.0)
     assert len(sent) == before  # no more calls into transmit this session
     stop(s)
@@ -550,7 +535,7 @@ def test_NP_8_session_ignores_a_commanded_address_to_its_name(tmp_path: Path) ->
 
     s.address.on_message = spy  # type: ignore[method-assign,assignment]
     for f in bam_frames(249, 65240, NAME.to_bytes(8, "little") + bytes([200]), fc.mono()):
-        s.capture._ingest(f)
+        put(s, f)
         run(s, fc, 0.05)
     run(s, fc, 3.0)
     assert seen == [NAME.to_bytes(8, "little") + bytes([200])]  # the command did arrive
@@ -569,9 +554,9 @@ def _requests_after(sent: list[tuple[float, int, bytes]], start: int) -> list[tu
 def _session_with_engine_and_scan_tool(tmp_path: Path) -> tuple[Session, FakeClock, list[Any]]:
     s, fc, sent = make(tmp_path)
     s.start()
-    s.capture._ingest(_claim(ENGINE, 0, fc.mono()))  # a known ECU: never asked for identity
+    put(s, _claim(ENGINE, 0, fc.mono()))  # a known ECU: never asked for identity
     run(s, fc, 1.0)
-    s.capture._ingest(_claim(SCAN, 249, fc.mono()))  # unknown: asked when it connects
+    put(s, _claim(SCAN, 249, fc.mono()))  # unknown: asked when it connects
     run(s, fc, 20.0)  # nobody answers: VIN and the scan tool's identity requests fail
     return s, fc, sent
 
@@ -605,14 +590,14 @@ def test_NP_13_train_start_asks_identity_from_every_device_present(tmp_path: Pat
 def test_NP_13_identity_replies_before_train_start_are_reused(tmp_path: Path) -> None:
     s, fc, sent = make(tmp_path)
     s.start()
-    s.capture._ingest(_claim(ENGINE, 0, fc.mono()))
+    put(s, _claim(ENGINE, 0, fc.mono()))
     run(s, fc, 1.0)
-    s.capture._ingest(_claim(SCAN, 249, fc.mono()))
+    put(s, _claim(SCAN, 249, fc.mono()))
     for _ in range(100):  # until the scan tool is asked for its Component ID
         run(s, fc, 0.1)
         if (249, 65259) in _requests_after(sent, 0):
             break
-    s.capture._ingest(frame((6 << 26) | (0xFEEB << 8) | 249, b"ACME*CR*", fc.mono()))  # reply
+    put(s, frame((6 << 26) | (0xFEEB << 8) | 249, b"ACME*CR*", fc.mono()))  # reply
     run(s, fc, 20.0)  # Software ID and ECU ID get no reply
     before = len(sent)
     s.train_start("jdoe")

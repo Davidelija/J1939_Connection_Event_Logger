@@ -9,10 +9,11 @@ import socket
 import subprocess
 import threading
 import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -38,25 +39,18 @@ START = datetime(2026, 11, 6, 14, 2, 11, tzinfo=timezone.utc)
 needs_unix = pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
     def bitrate_check(self) -> Optional[int]:
         return 250000
@@ -78,10 +72,12 @@ def session(root: Path) -> tuple[Session, FakeClock]:
     fc = FakeClock(start_utc=START, start_mono=100.0)
     settings = settings_from_config(json.loads((EXAMPLES / "cfg-v3.json").read_text("utf-8")))
     inv = inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
-    s = Session(Bus(clock=fc, root=root), settings, inv, {"config": "cfg-v3"}, None)
+    bus = Bus(clock=fc, root=root)
+    s = Session(bus, settings, inv, {"config": "cfg-v3"}, None)
+    _BUS[s] = bus
     _STARTED.append(s)
     s.start()
-    s.capture._ingest(Frame(1.7e9 + 100, 100.0, 0x0CF00400, True, False, False, bytes(8), False))
+    put(s, Frame(1.7e9 + 100, 100.0, 0x0CF00400, True, False, False, bytes(8), False))
     for _ in range(30):
         s.step()
         fc.advance(0.1)
@@ -90,7 +86,7 @@ def session(root: Path) -> tuple[Session, FakeClock]:
 
 def pump(s: Session, fc: FakeClock, done: threading.Event) -> None:
     while not done.is_set():
-        s.capture._ingest(Frame(1.7e9 + fc.mono(), fc.mono(), 0x0CF00400, True, False, False,
+        put(s, Frame(1.7e9 + fc.mono(), fc.mono(), 0x0CF00400, True, False, False,
                                 bytes(8), False))  # fmt: skip
         s.step()
         fc.advance(0.05)

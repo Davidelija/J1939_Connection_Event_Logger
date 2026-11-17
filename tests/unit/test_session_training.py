@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import socket
-import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -27,25 +26,18 @@ SCAN = 0x8000810033A1B2C4
 VIN = "1XKYD49X0GJ123456"
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
     def bitrate_check(self) -> Optional[int]:
         return 250000
@@ -77,7 +69,9 @@ def make(
     fc = FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2" if trained else None, "library": None}
     chosen = (inv or inventory()) if trained else None
-    s = Session(Bus(clock=fc, root=root), settings(), chosen, versions, None)
+    bus = Bus(clock=fc, root=root)
+    s = Session(bus, settings(), chosen, versions, None)
+    _BUS[s] = bus
     _STARTED.append(s)
     return s, fc
 
@@ -114,7 +108,7 @@ def run(s: Session, fc: FakeClock, seconds: float, *senders: int, step: float = 
     end = fc.mono() + seconds
     while fc.mono() < end:
         for sa in senders:
-            s.capture._ingest(pdu2(65262, sa, fc.mono()))
+            put(s, pdu2(65262, sa, fc.mono()))
         s.step()
         fc.advance(step)
 
@@ -128,7 +122,7 @@ def records(root: Path) -> list[dict[str, Any]]:
 
 def started(s: Session, fc: FakeClock) -> None:
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run(s, fc, 3.0, 0)
 
 
@@ -144,8 +138,8 @@ def test_TRN_4_trained_inventory_is_saved_only_when_confirmed(tmp_path: Path) ->
     s, fc = make(tmp_path)
     started(s, fc)
     s.train_start("jdoe")
-    s.capture._ingest(eec1(700, fc.mono()))
-    s.capture._ingest(claim(0x0000110012345678, 17, fc.mono()))
+    put(s, eec1(700, fc.mono()))
+    put(s, claim(0x0000110012345678, 17, fc.mono()))
     run(s, fc, 2.0, 0, 17)
     proposal = s.train_finish("jdoe")
     assert proposal["inventory"] == "inv-v3" and stored(tmp_path) == []  # not applied yet
@@ -187,7 +181,7 @@ def test_TRN_9_training_runs_detection_as_untrained(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
     s.train_start("jdoe")
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0, 249)
     [start] = [r for r in records(tmp_path) if r["type"] == "connection_start" and r["sa"] == 249]
     assert start["sev"] == "notice"  # capped while untrained
@@ -196,7 +190,7 @@ def test_TRN_9_training_runs_detection_as_untrained(tmp_path: Path) -> None:
 def test_TRN_11_nothing_is_added_without_an_operator_call(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 40.0, 0, 249)
     assert stored(tmp_path) == []
     assert not [r for r in records(tmp_path) if r["type"] in ("approval", "training_start")]
@@ -208,7 +202,7 @@ def test_TRN_11_nothing_is_added_without_an_operator_call(tmp_path: Path) -> Non
 def test_TRN_10_approving_a_logged_new_pgn_saves_the_next_version(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(pdu2(0xFE6C, 0, fc.mono()))  # 65132, new for E01
+    put(s, pdu2(0xFE6C, 0, fc.mono()))  # 65132, new for E01
     run(s, fc, 0.5, 0)
     [event] = [r for r in records(tmp_path) if r["type"] == "known_device_new_pgn"]
     version = s.approve(f"1-{event['rec']}", "jdoe", "RO 7001")
@@ -243,14 +237,14 @@ def test_DET_14_vin_mismatch_is_high_and_the_session_runs_untrained(tmp_path: Pa
     started(s, fc)
     run(s, fc, 1.0, 0)
     for f in bam(0x00, 65260, b"9ZZZZ00000Z000000*", fc.mono()):
-        s.capture._ingest(f)
+        put(s, f)
     run(s, fc, 1.0, 0)
     recs = records(tmp_path)
     [check] = [r for r in recs if r["type"] == "vin_check"]
     assert check["vin_status"] == "mismatch"
     [mismatch] = [r for r in recs if r["type"] == "vin_mismatch"]
     assert (mismatch["sev"], mismatch["inventory_vin"]) == ("high", VIN)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0, 249)
     [start] = [r for r in records(tmp_path) if r["type"] == "connection_start" and r["sa"] == 249]
     assert start["sev"] == "notice"  # untrained for the rest of the session
@@ -264,14 +258,14 @@ def test_LOG_10_connection_start_names_its_raw_capture_and_the_file_is_written(
 ) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 62.0, 0, 249)
     [start] = [r for r in records(tmp_path) if r["type"] == "connection_start"]
     assert start["raw_capture"] == "raw/s000001_c1_e1.log"
     lines = (tmp_path / "card" / start["raw_capture"]).read_text("ascii").splitlines()
-    times = [float(x[1:18]) - 1.7e9 for x in lines]
-    t_event = (datetime.fromisoformat(start["utc"].replace("Z", "+00:00")) - START).total_seconds()
-    assert min(times) <= 100.0 + t_event <= max(times)  # the window contains the record's utc
+    times = [float(x[1:18]) for x in lines]  # candump times: the kernel (wall) clock
+    t_event = datetime.fromisoformat(start["utc"].replace("Z", "+00:00")).timestamp()
+    assert min(times) <= t_event <= max(times)  # the window contains the record's utc
 
 
 def test_LOG_22_retention_stops_raw_captures_when_only_the_reserve_is_left(
@@ -282,7 +276,7 @@ def test_LOG_22_retention_stops_raw_captures_when_only_the_reserve_is_left(
         s.store, "usage", lambda: CardUsage(8000 * 2**20, 7600 * 2**20, 400 * 2**20)
     )
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0, 249)
     recs = records(tmp_path)
     causes = [(r["sev"], r["cause"]) for r in recs if r["type"] == "fault"]

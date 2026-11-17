@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 import shutil
-import socket
-import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -26,25 +25,18 @@ ENGINE = 0x000000002E412A10
 SCAN = 0x8000810033A1B2C4
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
     def bitrate_check(self) -> Optional[int]:
         return 250000
@@ -77,7 +69,9 @@ def make(root: Path, fc: Optional[FakeClock] = None) -> tuple[Session, FakeClock
         shutil.copy(EXAMPLES / "cfg-v3.json", folder / "cfg-v3.json")
     fc = fc or FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": None}
-    s = Session(Bus(clock=fc, root=root), settings(), inventory(), versions, None)
+    bus = Bus(clock=fc, root=root)
+    s = Session(bus, settings(), inventory(), versions, None)
+    _BUS[s] = bus
     _STARTED.append(s)
     return s, fc
 
@@ -94,7 +88,7 @@ def run(s: Session, fc: FakeClock, seconds: float, *senders: int, step: float = 
     end = fc.mono() + seconds
     while fc.mono() < end:
         for sa in senders:
-            s.capture._ingest(frame((6 << 26) | (65262 << 8) | sa, bytes(8), fc.mono()))
+            put(s, frame((6 << 26) | (65262 << 8) | sa, bytes(8), fc.mono()))
         s.step()
         fc.advance(step)
 
@@ -109,9 +103,9 @@ def records(root: Path) -> list[dict[str, Any]]:
 def with_scan_tool(tmp_path: Path) -> tuple[Session, FakeClock]:
     s, fc = make(tmp_path)
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run(s, fc, 3.0, 0)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0, 249)
     return s, fc
 
@@ -274,7 +268,7 @@ def test_TRN_6_a_saved_inventory_applies_from_the_next_session(tmp_path: Path) -
     event = s.handle("status")["result"]["unreviewed"][0]
     s.handle("approve", {"event": event}, operator="jdoe", reason="fleet ELD")
     run(s, fc, 31.0)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 4.0, 0, 249)
     headers = [r for r in records(tmp_path) if r["type"] == "session_start"]
     assert [h["inventory"] for h in headers] == ["inv-v2", "inv-v3"]

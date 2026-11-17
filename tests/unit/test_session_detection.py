@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import socket
-import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -24,29 +23,19 @@ ENGINE = 0x000000002E412A10  # E01 at SA 0
 SCAN = 0x8000810033A1B2C4
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
     def __init__(self, rate: Optional[int] = 250000, **kw: Any) -> None:
-        super().__init__(**kw)
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
         self.rate = rate
-
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
 
     def bitrate_check(self) -> Optional[int]:
         return self.rate
@@ -75,7 +64,9 @@ def _stop_sync_threads() -> Iterator[None]:
 def make(root: Path, rate: Optional[int] = 250000) -> tuple[Session, FakeClock]:
     fc = FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
-    s = Session(Bus(rate, clock=fc, root=root), settings(), inventory(), versions, None)
+    bus = Bus(rate, clock=fc, root=root)
+    s = Session(bus, settings(), inventory(), versions, None)
+    _BUS[s] = bus
     _STARTED.append(s)
     return s, fc
 
@@ -101,7 +92,7 @@ def run(s: Session, fc: FakeClock, seconds: float, *senders: int, step: float = 
     end = fc.mono() + seconds
     while fc.mono() < end:
         for sa in senders:
-            s.capture._ingest(pdu2(61444, sa, fc.mono()))
+            put(s, pdu2(61444, sa, fc.mono()))
         s.step()
         fc.advance(step)
 
@@ -115,17 +106,17 @@ def records(root: Path) -> list[dict[str, Any]]:
 
 def started(s: Session, fc: FakeClock) -> None:
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run(s, fc, 3.0, 0)  # claim settles and the first sweep completes
 
 
 def test_DET_6_key_off_ends_the_connection_before_session_end(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0)
-    s.capture._ingest(request(65235, 249, 0, fc.mono()))  # DM11 clear codes to the engine
-    s.capture._ingest(request(65227, 249, 0, fc.mono()))
+    put(s, request(65235, 249, 0, fc.mono()))  # DM11 clear codes to the engine
+    put(s, request(65227, 249, 0, fc.mono()))
     last = fc.mono()
     run(s, fc, 1.0, 0)
     run(s, fc, 31.0)  # bus silent: key-off after session.end_silence_s
@@ -151,7 +142,7 @@ def test_DET_6_key_off_ends_the_connection_before_session_end(tmp_path: Path) ->
 def test_DET_6_silence_end_while_the_bus_is_active(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 1.0, 0, 249)
     run(s, fc, 61.0, 0)  # the engine keeps sending; the scan tool is silent
     [end] = [r for r in records(tmp_path) if r["type"] == "connection_end"]
@@ -165,7 +156,7 @@ def test_DET_2_unclaimed_address_is_detected_when_the_first_sweep_completes(
 ) -> None:
     s, fc = make(tmp_path)
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run(s, fc, 0.3, 0, 200)
     assert not [r for r in records(tmp_path) if r["type"] == "connection_start"]
     run(s, fc, 3.0, 0, 200)
@@ -188,7 +179,7 @@ def test_DET_2_without_a_bit_rate_the_wait_ends_after_first_sweep_wait_s(tmp_pat
 def test_DET_12_known_ecu_sending_a_new_pgn_in_the_session(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(pdu2(0xFE6C, 0, fc.mono()))  # 65132: not in E01's trained set
+    put(s, pdu2(0xFE6C, 0, fc.mono()))  # 65132: not in E01's trained set
     run(s, fc, 0.5, 0)
     [rec] = [r for r in records(tmp_path) if r["type"] == "known_device_new_pgn"]
     assert (rec["sa"], rec["entry"], rec["pgn"], rec["direction"]) == (0, "E01", 65132, "sent")
@@ -200,8 +191,8 @@ def test_LOG_7_connection_records_for_new_devices_and_none_for_baseline_ecus(
 ) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
-    s.capture._ingest(claim(0x8000FE003C04D2E8, 238, fc.mono()))  # E04, approved
+    put(s, claim(SCAN, 249, fc.mono()))
+    put(s, claim(0x8000FE003C04D2E8, 238, fc.mono()))  # E04, approved
     run(s, fc, 1.0, 0, 249, 238)
     run(s, fc, 31.0)
     recs = [r for r in records(tmp_path) if r["type"].startswith("connection_")]
@@ -218,6 +209,6 @@ def test_NP_15_ecu_nack_to_the_logger_is_not_a_new_pgn(tmp_path: Path) -> None:
     started(s, fc)
     assert s.logger_sa == 247
     nack = bytes([1, 0xFF, 0xFF, 0xFF, 247]) + (65259).to_bytes(3, "little")
-    s.capture._ingest(frame((6 << 26) | (0xE8 << 16) | (0xFF << 8) | 0, nack, fc.mono()))
+    put(s, frame((6 << 26) | (0xE8 << 16) | (0xFF << 8) | 0, nack, fc.mono()))
     run(s, fc, 0.5, 0)
     assert not [r for r in records(tmp_path) if r["type"] == "known_device_new_pgn"]

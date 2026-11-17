@@ -192,6 +192,7 @@ class _Feed:
         self._queue: deque[tuple[bytes, list[tuple[int, int, bytes]], int]] = deque()
         self._idle = False  # the reader is waiting on an empty queue
         self.readers = 0  # open feed sockets
+        self.stalled = False  # capture's reader stopped on a receive fault until reopened
         self.drops: Optional[int] = None
 
     def put(self, frames: Sequence[Frame], drops: Optional[int]) -> bool:
@@ -218,8 +219,8 @@ class _Feed:
             self._queue.extend(items)
             self._idle = False
             self._cond.notify_all()
-            if self.readers == 0:
-                return False  # queued for when capture opens the socket
+            if self.readers == 0 or self.stalled:
+                return False  # queued for when capture opens the socket (again)
             return self._cond.wait_for(lambda: self._idle and not self._queue, _FEED_WAIT_S)
 
     def next(
@@ -246,7 +247,9 @@ class _FeedSocket:
         self._timeout: Optional[float] = 0.2
         self._rcvbuf = 1 << 20
         self._closed = False
-        feed.readers += 1
+        with feed._cond:
+            feed.readers += 1
+            feed.stalled = False
 
     def setsockopt(self, level: int, option: int, value: Any) -> None:
         if level == socket.SOL_SOCKET and isinstance(value, int) and value > 1:
@@ -270,7 +273,8 @@ class _FeedSocket:
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            self._feed.readers -= 1
+            with self._feed._cond:
+                self._feed.readers -= 1
 
 
 class DesktopPlatform:
@@ -427,6 +431,8 @@ class DesktopPlatform:
                 if w.kind == "slow_sync":
                     self._delay(w.delay_s)
                     return
+                if op == "can_recv" and self._feed is not None:
+                    self._feed.stalled = True  # capture's reader stops on this error
                 raise PlatformError(w.kind, f"fault plan, {op}")
 
     def _delay(self, s: float) -> None:

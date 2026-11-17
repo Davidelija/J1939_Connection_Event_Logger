@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 import shutil
-import socket
-import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -26,25 +25,18 @@ SCAN = 0x8000810033A1B2C4  # function 129
 TRAILER = 0x900400003E803039  # industry group 1, vehicle system 2 (classify.trailer_vehicle_system)
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
     def bitrate_check(self) -> Optional[int]:
         return 250000
@@ -79,7 +71,9 @@ def make(root: Path, library: Optional[bytes] = None) -> tuple[Session, FakeCloc
         (folder / "lib-v2.json").write_bytes(library)
     fc = FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": None}
-    s = Session(Bus(clock=fc, root=root), settings(), inventory(), versions, None)
+    bus = Bus(clock=fc, root=root)
+    s = Session(bus, settings(), inventory(), versions, None)
+    _BUS[s] = bus
     _STARTED.append(s)
     return s, fc
 
@@ -100,7 +94,7 @@ def run(s: Session, fc: FakeClock, seconds: float, *senders: int, step: float = 
     end = fc.mono() + seconds
     while fc.mono() < end:
         for sa in senders:
-            s.capture._ingest(frame((6 << 26) | (61444 << 8) | sa, bytes(8), fc.mono()))
+            put(s, frame((6 << 26) | (61444 << 8) | sa, bytes(8), fc.mono()))
         s.step()
         fc.advance(step)
 
@@ -114,13 +108,13 @@ def records(root: Path) -> list[dict[str, Any]]:
 
 def started(s: Session, fc: FakeClock) -> None:
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run(s, fc, 3.0, 0)  # claim settles and the first sweep completes
 
 
 def requests_from(s: Session, fc: FakeClock, sa: int, pgns: list[int]) -> None:
     for pgn in pgns:
-        s.capture._ingest(request(pgn, sa, 0, fc.mono()))
+        put(s, request(pgn, sa, 0, fc.mono()))
     run(s, fc, 0.2, 0, sa)
 
 
@@ -129,7 +123,7 @@ def test_IDN_4_session_identifies_the_scan_tool_when_its_identity_requests_finis
 ) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226, 65227])
     run(s, fc, 12.0, 0, 249)  # three identity requests, each tried twice (NP-14)
@@ -158,7 +152,7 @@ def test_IDN_4_identify_sees_requests_up_to_identification_then_the_whole_connec
     monkeypatch.setattr("j1939logger.session.identification.identify", spy)
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226])  # session 142's set at identification
     run(s, fc, 12.0, 0, 249)  # the identity requests finish: identification
@@ -176,7 +170,7 @@ def test_IDN_4_connection_end_carries_the_final_identification_when_it_changes(
 ) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226, 65227])
     run(s, fc, 12.0, 0, 249)
@@ -192,7 +186,7 @@ def test_IDN_4_connection_end_carries_the_final_identification_when_it_changes(
 def test_IDN_4_no_final_identification_when_nothing_changed(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226, 65227])
     run(s, fc, 12.0, 0, 249)
@@ -204,7 +198,7 @@ def test_IDN_4_no_final_identification_when_nothing_changed(tmp_path: Path) -> N
 def test_DET_18_trailer_that_sends_requests_is_reclassified_high(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(TRAILER, 200, fc.mono()))
+    put(s, claim(TRAILER, 200, fc.mono()))
     run(s, fc, 0.5, 0, 200)
     requests_from(s, fc, 200, [65226])  # a diagnostic request
     run(s, fc, 12.0, 0, 200)
@@ -226,7 +220,7 @@ def test_DET_18_trailer_that_sends_requests_is_reclassified_high(tmp_path: Path)
 def test_DET_18_broadcast_only_trailer_stays_a_trailer_at_notice(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(TRAILER, 200, fc.mono()))
+    put(s, claim(TRAILER, 200, fc.mono()))
     run(s, fc, 12.5, 0, 200)
     run(s, fc, 31.0)
     recs = records(tmp_path)
@@ -241,7 +235,7 @@ def test_IDN_5_corrupt_library_is_a_high_fault_and_identification_continues(
 ) -> None:
     s, fc = make(tmp_path, library=b'{"format": "lib-1", "library": "lib-v2", "devices": 3}')
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226, 65227])
     run(s, fc, 12.0, 0, 249)
@@ -257,7 +251,7 @@ def test_IDN_5_corrupt_library_is_a_high_fault_and_identification_continues(
 def test_SC_3_a_device_is_detected_and_identified_from_message_content(tmp_path: Path) -> None:
     s, fc = make(tmp_path)
     started(s, fc)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run(s, fc, 0.5, 0, 249)
     requests_from(s, fc, 249, [65260, 65259, 65226, 65227, 65235])
     run(s, fc, 12.0, 0, 249)
