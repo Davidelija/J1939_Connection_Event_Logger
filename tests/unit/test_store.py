@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -130,8 +131,11 @@ def test_LOG_23_write_atomic_syncs_the_file_and_the_directory(
     events: list[tuple[str, str]] = []
     names: dict[int, str] = {}
     real_open, real_fsync, real_replace = os.open, os.fsync, os.replace
+    me = threading.get_ident()  # other tests' sync threads may still be running: ignore them
 
     def spy_open(path: object, flags: int, mode: int = 0o777) -> int:
+        if threading.get_ident() != me:
+            return real_open(path, flags, mode)  # type: ignore[arg-type]
         target = Path(str(path))
         if target.is_dir():  # Windows cannot open a folder: a stand-in file keeps the order
             fd = real_open(tmp_path / "dir-stand-in", os.O_RDWR | os.O_CREAT, 0o644)
@@ -142,11 +146,13 @@ def test_LOG_23_write_atomic_syncs_the_file_and_the_directory(
         return fd
 
     def spy_fsync(fd: int) -> None:
-        events.append(("fsync", names.get(fd, "?")))
+        if threading.get_ident() == me:
+            events.append(("fsync", names.get(fd, "?")))
         real_fsync(fd)
 
     def spy_replace(src: object, dst: object) -> None:
-        events.append(("replace", Path(str(dst)).name))
+        if threading.get_ident() == me:
+            events.append(("replace", Path(str(dst)).name))
         real_replace(src, dst)  # type: ignore[arg-type]
 
     monkeypatch.setattr(os, "open", spy_open)

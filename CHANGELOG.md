@@ -79,3 +79,5 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - `docs/test-writers-brief.md`: a hand-off brief for the test-script writers (levels 2 and 3): what exists, what is missing in order, coverage by case, conventions.
 - User manual: the device library source path is `src/j1939logger/data/device_library.json`, created in step 8; the stale "(step 5)" note is gone.
 - Review record: the build-step rows for steps 1 to 7 and DC-22 recorded as reviewed by Vaughan Lynn and Elijah Umaru (reported 2026-11-16).
+- `docs/step-2a-run-sheet.md`: the Beacon go/no-go checks (X18, X41) as commands, what to record and the pass or fallback for each, with the go/no-go rule and what to update afterwards.
+- Test fix: `test_LOG_23_write_atomic_syncs_the_file_and_the_directory` (QC-3 U2) records only its own thread, so a sync thread left running by an earlier test cannot add an fsync to its list (it failed once in CI for that reason).
