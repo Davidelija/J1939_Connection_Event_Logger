@@ -33,7 +33,23 @@ Tick each item before you start.
   - `crypto/`: the `cryptography` wheel for the Beacon's CPU and Python. This needs B1 and B2 first; if you don't know them yet, leave it for a second short session.
 - [ ] **No network cable** to the Beacon, except the laptop link in F1.
 
-## 3. Conventions
+## 3. Run it with the script (DC-29)
+
+`tools/step2a.py` runs this procedure from the laptop over SSH: the same commands, in the order of section 4. It saves each check's output to `docs/test-evidence/2a_<date>/`, suggests Pass, Fail or Gap where a machine can judge, asks you for the physical steps (disconnect Beacon 2, the power-off, plugging in the laptop, the datasheet and the tap), and writes `results.md`, the results sheet of section 12 pre-filled for you to confirm.
+
+```sh
+python tools/step2a.py --beacon1 root@<beacon-1> --beacon2 root@<beacon-2> --wheels wheels/ [--crypto crypto/]
+```
+
+- Set up SSH keys for both Beacons first (`ssh root@<beacon> true` must work without a password prompt).
+- It asks you to type `BENCH` before the first frame is sent, and stops at a no-go (A1, A3 or A4).
+- It copies the wheel folders to the Beacon with `scp`, so B3 and B4 need no USB stick.
+- After the power-off, or on another day, continue with `--resume docs/test-evidence/2a_<date>`. Rerun single checks with `--only A7,C1`.
+- At the end (or on Ctrl-C) it puts both CAN interfaces back to 250 kbit/s, normal mode, termination off, and removes its test units.
+
+You can always run any check by hand as described below; the script only saves typing. Check every suggested result in `results.md` before handing it over.
+
+## 3a. Conventions (by hand)
 
 **Where commands run.** "B1#" means a root shell on Beacon 1; "B2#" a root shell on Beacon 2. Log in over SSH from the laptop, or on a console.
 
@@ -438,7 +454,7 @@ B1# { python3 -m venv /root/2a-venv && /root/2a-venv/bin/pip install --no-index 
 ## 10. Finish
 
 1. Put both Beacons' CAN interfaces back to 250 kbit/s, normal mode, termination off.
-2. Copy the evidence folders to the laptop (section 3), and add the photos.
+2. Copy the evidence folders to the laptop (section 3a; the script does this itself), and add the photos.
 3. Fill in the results sheet below, and hand it to the developers with the evidence.
 
 ## 11. What the developers do with the results
