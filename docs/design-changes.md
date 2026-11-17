@@ -31,14 +31,14 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
-## DC-new-20261117-one-observer — `bench/checklists.md`: one observer is enough  (proposed, 2026-11-17)
+## DC-28 — `bench/checklists.md`: one observer is enough  (accepted, 2026-11-17)
 - **Raised by:** Claude Code, branch `cleanup-feed`, after Vaughan Lynn dropped every two-person requirement on 2026-11-17 (`docs/reviews.md`)
-- **Decided by:**
+- **Decided by:** Vaughan Lynn, 2026-11-17 (accepted in the Claude Code session; one reviewer is enough, so no further confirmation is needed)
 - **Change:** in `bench/checklists.md`, the Observer convention "the person who watched or inspected, not the person who ran the step (two people where possible: Vaughan Lynn, Elijah Umaru)" becomes "the person who watched or inspected: Vaughan Lynn or Elijah Umaru; one person is enough, and may be the person who ran the step". No checklist item changes.
 - **Why:** the project now accepts one reviewer, Vaughan Lynn or Elijah Umaru, for everything, including safety-critical paths and DC confirmations (`docs/reviews.md`, 2026-11-17). `bench/checklists.md` is the last document asking for two people.
-- **Who changes it:** `bench/` belongs to the test-script writers (DC-4); a change from the developers' side needs this entry. Once it is accepted, the developers make the one-line edit in the same pull request, or the test-script writers make it.
+- **Who changes it:** `bench/` belongs to the test-script writers (DC-4); a change from the developers' side needs this entry. The developers made the one-line edit in the same pull request (`cleanup-feed`, PR #43); the test-script writers are told in the PR.
 - **Affects:** `bench/checklists.md` (the Observer line only). No requirement, contract, record or format change.
-- **Docs updated in the same change (once accepted):** `bench/checklists.md`, `CHANGELOG.md`.
+- **Docs updated in the same change:** `bench/checklists.md`, `CHANGELOG.md`.
 - **Tests:** none.
 
 ## DC-27 — A public seam for feeding frames to the logger in level 2 tests  (accepted, 2026-11-17)

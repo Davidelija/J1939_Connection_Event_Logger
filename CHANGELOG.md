@@ -91,4 +91,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - Tests: every session test now puts frames on the bus through `DesktopPlatform.feed` (DC-27) instead of the private `Capture._ingest` (71 calls in 9 files), so they also exercise `capture`'s socket receive path. The dummy sockets are gone; the transmit tests read what was sent from the platform's `sent_frames`. Two tests now check real values the old stubs hid: the receive buffer read back is `can.rx_buffer_bytes` (LOG-15), and raw capture times are on the logger's wall clock (LOG-10).
 - Desktop platform: a receive fault marks the feed stalled, so `feed()` returns at once instead of waiting while capture is stopped.
 - Review record: PRs #40 and #41 approved by Vaughan Lynn (2026-11-17).
-- Proposed, not yet accepted: DC-new-20261117-one-observer (`bench/checklists.md`: one observer is enough).
+- DC-28: `bench/checklists.md` now says one observer (Vaughan Lynn or Elijah Umaru) is enough for a checklist item.

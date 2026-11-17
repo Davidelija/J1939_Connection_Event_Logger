@@ -2,7 +2,7 @@
 
 Every requirement whose verification method includes D (demonstration), I (inspection) or A (analysis), excluding Deferred rows: 50 items. Requirements that are also T keep their tests (see `docs/test-plan.md`); this list covers the D, I or A part. Fill in **Observer**, **Date**, **Result** and **Evidence** when the item is done, and copy the result to `docs/verification.md`.
 
-- **Observer:** the person who watched or inspected, not the person who ran the step (two people where possible: Vaughan Lynn, Elijah Umaru).
+- **Observer:** the person who watched or inspected: Vaughan Lynn or Elijah Umaru; one person is enough, and may be the person who ran the step (DC-28).
 - **Evidence:** a file in `docs/test-evidence/` (photo, command output, screenshot, report), named `<ID>_<date>.<ext>`.
 - **Auto** marks items also checked by an automated end-to-end test; the checklist item is still signed once on the rig.
 
