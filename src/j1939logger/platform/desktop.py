@@ -57,15 +57,18 @@ checks) and there is no bit rate, so ``bitrate_check()`` returns the
 from __future__ import annotations
 
 import socket
+import struct
 import tempfile
+import threading
 import time
+from collections import deque
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from j1939logger.platform.interface import FAULT_KINDS, FAULT_OPS, LIGHT_PATTERNS, Paths
-from j1939logger.types import ClockReading, PlatformError
+from j1939logger.types import ClockReading, Frame, PlatformError
 
 __all__ = ["DesktopPlatform", "FakeClock", "FaultSpec", "DELIVERED_FAULT_KINDS", "OPS_BY_KIND"]
 
@@ -172,6 +175,104 @@ class _Window:
         return self.start <= mono < self.end
 
 
+_CAN_FRAME = struct.Struct("=IB3x8s")  # struct can_frame
+_TIMEVAL = struct.Struct("=qq")
+_U32 = struct.Struct("=I")
+_MSG_CONFIRM = 0x800
+_EFF, _RTR, _ERR = 0x80000000, 0x40000000, 0x20000000
+_FEED_WAIT_S = 5.0
+
+
+class _Feed:
+    """Frames queued by ``DesktopPlatform.feed()`` for its in-memory socket (DC-27)."""
+
+    def __init__(self, platform: DesktopPlatform) -> None:
+        self._platform = platform
+        self._cond = threading.Condition()
+        self._queue: deque[tuple[bytes, list[tuple[int, int, bytes]], int]] = deque()
+        self._idle = False  # the reader is waiting on an empty queue
+        self.readers = 0  # open feed sockets
+        self.drops: Optional[int] = None
+
+    def put(self, frames: Sequence[Frame], drops: Optional[int]) -> bool:
+        if drops is not None:
+            self.drops = drops
+        reading = self._platform.now()
+        offset = None if reading.wall_utc is None else reading.wall_utc.timestamp() - reading.mono
+        items = []
+        for f in frames:
+            can_id = f.can_id | (_EFF if f.extended else 0)
+            can_id |= (_RTR if f.remote else 0) | (_ERR if f.error else 0)
+            data = bytes(f.data[:8])
+            raw = _CAN_FRAME.pack(can_id, len(data), data)
+            anc: list[tuple[int, int, bytes]] = []
+            if offset is not None:  # the kernel timestamp that gives back this ts_mono
+                ts = f.ts_mono + offset
+                sec = int(ts)
+                anc.append((socket.SOL_SOCKET, _SO_TIMESTAMP,
+                            _TIMEVAL.pack(sec, round((ts - sec) * 1e6))))  # fmt: skip
+            if self.drops is not None:
+                anc.append((socket.SOL_SOCKET, _SO_RXQ_OVFL, _U32.pack(self.drops)))
+            items.append((raw, anc, _MSG_CONFIRM if f.own else 0))
+        with self._cond:
+            self._queue.extend(items)
+            self._idle = False
+            self._cond.notify_all()
+            if self.readers == 0:
+                return False  # queued for when capture opens the socket
+            return self._cond.wait_for(lambda: self._idle and not self._queue, _FEED_WAIT_S)
+
+    def next(
+        self, timeout: Optional[float]
+    ) -> tuple[bytes, list[tuple[int, int, bytes]], int, Any]:
+        with self._cond:
+            if not self._queue:
+                self._idle = True  # everything fed so far has been taken in
+                self._cond.notify_all()
+                self._cond.wait_for(lambda: bool(self._queue), timeout)
+            if not self._queue:
+                raise socket.timeout()
+            self._idle = False
+            raw, anc, flags = self._queue.popleft()
+            return raw, anc, flags, None
+
+
+class _FeedSocket:
+    """The in-memory CAN socket ``open_can()`` returns when the feed is on (DC-27)."""
+
+    def __init__(self, feed: _Feed, platform: DesktopPlatform) -> None:
+        self._feed = feed
+        self._platform = platform
+        self._timeout: Optional[float] = 0.2
+        self._rcvbuf = 1 << 20
+        self._closed = False
+        feed.readers += 1
+
+    def setsockopt(self, level: int, option: int, value: Any) -> None:
+        if level == socket.SOL_SOCKET and isinstance(value, int) and value > 1:
+            self._rcvbuf = value  # SO_RCVBUFFORCE or SO_RCVBUF
+
+    def getsockopt(self, level: int, option: int) -> int:
+        return self._rcvbuf
+
+    def settimeout(self, timeout: Optional[float]) -> None:
+        self._timeout = timeout
+
+    def recvmsg(self, bufsize: int, ancbufsize: int = 0) -> Any:
+        return self._feed.next(self._timeout)
+
+    def send(self, data: bytes) -> int:
+        can_id, dlc, payload = _CAN_FRAME.unpack(data[: _CAN_FRAME.size])
+        self._platform.sent_frames.append((self._platform.now().mono, can_id & 0x1FFFFFFF,
+                                           bytes(payload[:dlc])))  # fmt: skip
+        return len(data)
+
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._feed.readers -= 1
+
+
 class DesktopPlatform:
     """The desktop (``vcan0``) implementation of ``Platform``."""
 
@@ -183,6 +284,7 @@ class DesktopPlatform:
         interface: str = "vcan0",
         bitrate: int = 250000,
         root: Optional[Path] = None,
+        feed: bool = False,
     ) -> None:
         self._clock: Any = _HostClock() if clock is None else clock
         self._fake = clock
@@ -201,6 +303,9 @@ class DesktopPlatform:
         self.lights: list[str] = []  # every pattern set, in order (for tests)
         self.watchdog_kicks = 0  # number of kicks (for tests)
         self.listen_only: Optional[bool] = None  # mode of the last open_can() (for tests)
+        # DC-27: with feed=True, open_can() returns an in-memory socket fed by feed().
+        self._feed: Optional[_Feed] = _Feed(self) if feed else None
+        self.sent_frames: list[tuple[float, int, bytes]] = []  # (mono, can_id, data) sent
 
     # -- fault plan -------------------------------------------------------
 
@@ -248,6 +353,9 @@ class DesktopPlatform:
     def open_can(self, listen_only: bool) -> socket.socket:
         if self._active("can_missing"):
             raise PlatformError("can_missing", "fault plan")
+        if self._feed is not None:  # DC-27: the test feed, not vcan0
+            self.listen_only = listen_only
+            return cast(socket.socket, _FeedSocket(self._feed, self))
         if not hasattr(socket, "AF_CAN"):
             raise PlatformError("can_missing", "AF_CAN is not available on this system")
         try:
@@ -266,6 +374,19 @@ class DesktopPlatform:
         # vcan has no controller mode: listen-only is recorded, not applied.
         self.listen_only = listen_only
         return sock
+
+    def feed(self, frames: Sequence[Frame], drops: Optional[int] = None) -> bool:
+        """Put frames on the bus for ``capture`` (level 2 tests, DC-27).
+
+        Each frame reaches ``capture`` through ``recvmsg`` as from SocketCAN: a kernel
+        timestamp that gives back its ``ts_mono``, ``drops`` as the SO_RXQ_OVFL count,
+        and ``own`` as MSG_CONFIRM. Returns True once ``capture`` has taken in every
+        frame fed so far (so the next ``session.step()`` sees them), or False if no
+        socket is open yet (the frames wait) or capture did not take them in time.
+        """
+        if self._feed is None:
+            raise RuntimeError("feed() needs DesktopPlatform(..., feed=True)")
+        return self._feed.put(frames, drops)
 
     def bitrate_check(self) -> Optional[int]:
         if self._active("no_bitrate"):

@@ -6,6 +6,7 @@ import json
 import shutil
 import socket
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -57,6 +58,18 @@ def inventory() -> Inventory:
     return inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
 
 
+_STARTED: list[Session] = []  # stopped after each test (QC-4 E3: no sync thread left running)
+
+
+@pytest.fixture(autouse=True)
+def _stop_sync_threads() -> Iterator[None]:
+    yield
+    while _STARTED:
+        s = _STARTED.pop()
+        if s.eventlog is not None:
+            s.eventlog.stop_sync()
+
+
 def make(root: Path, library: Optional[bytes] = None) -> tuple[Session, FakeClock]:
     folder = root / "card" / "library"
     folder.mkdir(parents=True)
@@ -66,7 +79,9 @@ def make(root: Path, library: Optional[bytes] = None) -> tuple[Session, FakeCloc
         (folder / "lib-v2.json").write_bytes(library)
     fc = FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": None}
-    return Session(Bus(clock=fc, root=root), settings(), inventory(), versions, None), fc
+    s = Session(Bus(clock=fc, root=root), settings(), inventory(), versions, None)
+    _STARTED.append(s)
+    return s, fc
 
 
 def frame(cid: int, data: bytes, t: float) -> Frame:

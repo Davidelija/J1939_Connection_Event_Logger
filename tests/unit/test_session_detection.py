@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import socket
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, cast
+
+import pytest
 
 from j1939logger.config import Inventory
 from j1939logger.main import inventory_from_file
@@ -57,10 +60,24 @@ def inventory() -> Inventory:
     return inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
 
 
+_STARTED: list[Session] = []  # stopped after each test (QC-4 E3: no sync thread left running)
+
+
+@pytest.fixture(autouse=True)
+def _stop_sync_threads() -> Iterator[None]:
+    yield
+    while _STARTED:
+        s = _STARTED.pop()
+        if s.eventlog is not None:
+            s.eventlog.stop_sync()
+
+
 def make(root: Path, rate: Optional[int] = 250000) -> tuple[Session, FakeClock]:
     fc = FakeClock(start_utc=START, start_mono=100.0)
     versions = {"config": "cfg-v3", "inventory": "inv-v2", "library": "lib-v1"}
-    return Session(Bus(rate, clock=fc, root=root), settings(), inventory(), versions, None), fc
+    s = Session(Bus(rate, clock=fc, root=root), settings(), inventory(), versions, None)
+    _STARTED.append(s)
+    return s, fc
 
 
 def frame(cid: int, data: bytes, t: float) -> Frame:

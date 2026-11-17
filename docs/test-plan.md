@@ -66,6 +66,7 @@ The levels are the ones in `docs/modules.md` §5. Each uses only its listed entr
 
 - Time: `FakeClock` (`advance`, `jump`).
 - Faults: `DesktopPlatform(fault_plan=[(at_mono, kind, args)])`, using `docs/errors.md` kind spellings. The plan delivers `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `platform.fault(op)` the socket and storage errors `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync` (DC-5). Other kinds (for example `bus_off`, `state_corrupt`, `name_collision`) come from traffic, the harness or test setup.
+- Frames: `DesktopPlatform(..., feed=True).feed(frames, drops=None)` at level 2 (DC-27); `canplayer` on `vcan0` at level 3.
 - Commands: the `cmdserver` socket at level 2; `j1939cmd` at level 3.
 
 There is no separate fakes module: `FakeClock` and `DesktopPlatform` are the interface code merged first in build step 1.

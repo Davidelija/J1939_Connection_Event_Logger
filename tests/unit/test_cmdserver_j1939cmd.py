@@ -9,6 +9,7 @@ import socket
 import subprocess
 import threading
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -61,11 +62,24 @@ class Bus(DesktopPlatform):
         return 250000
 
 
+_STARTED: list[Session] = []  # stopped after each test (QC-4 E3: no sync thread left running)
+
+
+@pytest.fixture(autouse=True)
+def _stop_sync_threads() -> Iterator[None]:
+    yield
+    while _STARTED:
+        s = _STARTED.pop()
+        if s.eventlog is not None:
+            s.eventlog.stop_sync()
+
+
 def session(root: Path) -> tuple[Session, FakeClock]:
     fc = FakeClock(start_utc=START, start_mono=100.0)
     settings = settings_from_config(json.loads((EXAMPLES / "cfg-v3.json").read_text("utf-8")))
     inv = inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
     s = Session(Bus(clock=fc, root=root), settings, inv, {"config": "cfg-v3"}, None)
+    _STARTED.append(s)
     s.start()
     s.capture._ingest(Frame(1.7e9 + 100, 100.0, 0x0CF00400, True, False, False, bytes(8), False))
     for _ in range(30):

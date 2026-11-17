@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import struct
 import sys
+import time
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from j1939logger.capture import Capture
 from j1939logger.platform.desktop import (
     DELIVERED_FAULT_KINDS,
     OPS_BY_KIND,
@@ -21,7 +24,7 @@ from j1939logger.platform.desktop import (
     FaultSpec,
 )
 from j1939logger.platform.interface import FAULT_KINDS, FAULT_OPS, LIGHT_PATTERNS
-from j1939logger.types import PlatformError
+from j1939logger.types import Frame, PlatformError
 
 START = datetime(2026, 11, 6, 14, 2, 11, tzinfo=timezone.utc)
 
@@ -302,3 +305,123 @@ def test_PLT_2_fault_rejects_unknown_operation(tmp_path: Path) -> None:
     p, _ = make(tmp_path)
     with pytest.raises(ValueError):
         p.fault("card_read")
+
+
+# -- DC-27: the frame feed for level 2 tests -----------------------------------------------------
+
+FEED_START = datetime(2026, 11, 6, 14, 2, 11, tzinfo=timezone.utc)
+
+
+def _fed(
+    tmp_path: Path, plan: Sequence[FaultSpec] = ()
+) -> tuple[DesktopPlatform, FakeClock, Capture]:
+    fc = FakeClock(start_utc=FEED_START, start_mono=100.0)
+    p = DesktopPlatform(plan, clock=fc, root=tmp_path, feed=True)
+    cap = Capture(p, rx_buffer_bytes=2 << 20, raw_before_s=10.0)
+    cap.start(listen_only=True)
+    return p, fc, cap
+
+
+def _claim(sa: int, t: float, own: bool = False) -> Frame:
+    return Frame(0.0, t, 0x18EEFF00 | sa, True, False, False, bytes(range(8)), own)
+
+
+def test_DC_27_feed_delivers_frames_through_capture_with_timestamps(tmp_path: Path) -> None:
+    p, fc, cap = _fed(tmp_path)
+    try:
+        fc.advance(5.0)
+        sent = [_claim(249, 104.25), Frame(0.0, 104.5, 0x123, False, True, False, b"", False),
+                _claim(0, 104.75, own=True)]  # fmt: skip
+        assert p.feed(sent) is True  # returns once capture has taken them all in
+        got = cap.read_batch(10)
+        assert [(f.can_id, f.extended, f.remote, f.own, f.data) for f in got] == [
+            (0x18EEFFF9, True, False, False, bytes(range(8))),
+            (0x123, False, True, False, b""),
+            (0x18EEFF00, True, False, True, bytes(range(8))),
+        ]
+        assert [f.ts_mono for f in got] == pytest.approx([104.25, 104.5, 104.75], abs=1e-5)
+        wall = FEED_START.timestamp() - 100.0  # the fake clock's wall minus mono
+        assert got[0].ts_kernel == pytest.approx(104.25 + wall, abs=1e-5)  # SO_TIMESTAMP
+        assert cap.stats().rx_buffer_bytes == 2 << 20  # SO_RCVBUFFORCE read back
+    finally:
+        cap.stop()
+
+
+def test_DC_27_feed_reports_drops_as_kernel_drops(tmp_path: Path) -> None:
+    p, fc, cap = _fed(tmp_path)
+    try:
+        assert p.feed([_claim(249, 100.1)]) is True
+        assert cap.stats().kernel_drops == 0
+        assert p.feed([_claim(249, 100.2)], drops=7) is True  # SO_RXQ_OVFL
+        assert cap.stats().kernel_drops == 7
+    finally:
+        cap.stop()
+
+
+def test_DC_27_feed_records_what_the_logger_sends(tmp_path: Path) -> None:
+    p, fc, cap = _fed(tmp_path)
+    try:
+        fc.advance(1.0)
+        cap.transmit_handle().send(0x18EAFFF7, (60928).to_bytes(3, "little"))
+        assert p.sent_frames == [(101.0, 0x18EAFFF7, (60928).to_bytes(3, "little"))]
+    finally:
+        cap.stop()
+
+
+def test_DC_27_socket_faults_apply_to_the_feed(tmp_path: Path) -> None:
+    p, fc, cap = _fed(tmp_path, [(101.0, "can_down", {"for_s": 1.0})])
+    try:
+        assert p.feed([_claim(249, 100.1)]) is True
+        assert len(cap.read_batch(10)) == 1
+        fc.advance(1.0)  # 101: the interface goes down, as for a real socket (DC-5)
+        error = None
+        deadline = time.monotonic() + 3.0
+        while error is None and time.monotonic() < deadline:
+            try:
+                cap.read_batch(10)  # capture checks can_recv before each receive
+            except PlatformError as exc:
+                error = exc
+            time.sleep(0.01)
+        assert error is not None and error.kind == "can_down"
+    finally:
+        cap.stop()
+    q = DesktopPlatform(clock=FakeClock(start_mono=100.0), root=tmp_path / "q", feed=True,
+                        fault_plan=[(0.0, "can_missing", None)])  # fmt: skip
+    with pytest.raises(PlatformError) as missing:
+        q.open_can(listen_only=True)
+    assert missing.value.kind == "can_missing"
+
+
+def test_DC_27_a_session_on_the_feed_logs_a_new_device(tmp_path: Path) -> None:
+    from j1939logger.main import inventory_from_file
+    from j1939logger.session import Session, session_files, settings_from_config
+
+    examples = Path(__file__).resolve().parents[2] / "docs" / "examples"
+    fc = FakeClock(start_utc=FEED_START, start_mono=100.0)
+    p = DesktopPlatform(clock=fc, root=tmp_path, feed=True)
+    settings = settings_from_config(json.loads((examples / "cfg-v3.json").read_text("utf-8")))
+    inv = inventory_from_file(json.loads((examples / "inv-v2.json").read_text("utf-8")))
+    s = Session(p, settings, inv, {"config": "cfg-v3"}, None)
+    s.start()
+
+    def run(seconds: float, *senders: int) -> None:
+        end = fc.mono() + seconds
+        while fc.mono() < end:
+            p.feed([Frame(0.0, fc.mono(), 0x0CF00400 | sa, True, False, False, bytes(8), False)
+                    for sa in senders])  # fmt: skip
+            s.step()
+            fc.advance(0.1)
+
+    engine, scan = (0x2E412A10).to_bytes(8, "little"), (0x8000810033A1B2C4).to_bytes(8, "little")
+    p.feed([Frame(0.0, fc.mono(), 0x18EEFF00, True, False, False, engine, False)])
+    run(3.0, 0)
+    p.feed([Frame(0.0, fc.mono(), 0x18EEFFF9, True, False, False, scan, False)])
+    run(2.0, 0, 249)
+    s.stop()
+    s.run()
+    recs = [json.loads(x) for f in session_files(tmp_path / "card" / "sessions")
+            for x in f.path.read_text("utf-8").splitlines()]  # fmt: skip
+    assert [(r["type"], r.get("sa")) for r in recs if r["type"] == "connection_start"] == [
+        ("connection_start", 249)
+    ]
+    assert p.listen_only is False and p.sent_frames  # normal mode; claim and requests sent

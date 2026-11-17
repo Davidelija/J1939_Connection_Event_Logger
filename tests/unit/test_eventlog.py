@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -176,6 +177,60 @@ def test_LOG_22_a_single_storage_error_says_record_not_written(tmp_path: Path) -
     fc.advance(1.0)
     assert log.append(fault) is not None
     assert lines(path)[-1]["logger_action"] == "record not written"
+
+
+SYNC_FAILED = "sync failed; records since the last sync may not be on the card"  # QC-4 E2
+
+
+def _storage_faults(path: Path) -> list[dict[str, Any]]:
+    return [r for r in lines(path) if r["type"] == "fault" and r["cause"].startswith("storage")]
+
+
+def test_LOG_22_sync_thread_fault_is_never_lost(tmp_path: Path) -> None:
+    log, fc, path = setup(tmp_path, [
+        (101.0, "eio", {"ops": ["card_sync"], "for_s": 1.0}),  # the sync thread fails
+        (103.0, "eio", {"ops": ["card_write"], "for_s": 1.0}),  # then a write fails
+        (110.0, "eio", {"ops": ["card_write"], "for_s": 1.0}),  # a later, separate outage
+    ])  # fmt: skip
+    log.append(conn_start(START))
+    fc.advance(1.0)  # 101: syncs fail
+    log.start_sync(0.001)
+    taken: list[Record] = []
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and (not taken or time.monotonic() < deadline - 4.8):
+        taken += log.take_faults()  # the session takes faults while the sync thread fails
+    assert len(taken) == 1  # one outage, one fault, however many syncs failed
+    [fault] = taken
+    assert fault.fields["logger_action"] == SYNC_FAILED
+    fc.advance(2.0)  # 103: syncs work again, writes fail
+    assert log.append(conn_start(START)) is None  # a record lost in the same outage
+    assert log.append(fault) is None  # the fault cannot be written yet ...
+    assert log.take_faults() == [fault]  # ... and is handed out again, never dropped
+    fc.advance(2.0)  # 105: the card is back
+    assert log.append(fault) is not None
+    [written] = _storage_faults(path)  # exactly one storage fault record for the outage
+    assert written["logger_action"] == "record not written"  # one record was lost
+    fc.advance(5.0)  # 110: a later outage
+    assert log.append(conn_start(START)) is None
+    [later] = log.take_faults()
+    assert later is not fault  # a new outage is reported again
+    fc.advance(2.0)
+    assert log.append(later) is not None
+    log.stop_sync()
+    assert len(_storage_faults(path)) == 2
+    verify(lines(path), ZERO_HASH)
+
+
+def test_LOG_22_sync_failure_with_no_record_lost_says_sync_failed(tmp_path: Path) -> None:
+    log, fc, path = setup(tmp_path, [(101.0, "eio", {"ops": ["card_sync"], "for_s": 1.0})])
+    log.append(conn_start(START))
+    fc.advance(1.0)
+    assert log.sync_now() is False
+    [fault] = log.take_faults()
+    fc.advance(1.0)
+    assert log.append(fault) is not None
+    [written] = _storage_faults(path)
+    assert written["logger_action"] == SYNC_FAILED
 
 
 def test_LOG_22_card_removed_then_reinserted_reopens_the_file(tmp_path: Path) -> None:

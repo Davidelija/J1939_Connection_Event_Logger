@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import threading
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -26,3 +28,26 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         parts = Path(str(item.fspath)).resolve().relative_to(ROOT / "tests").parts
         if parts and parts[0] in _LEVELS:
             item.add_marker(getattr(pytest.mark, _LEVELS[parts[0]]))
+
+
+def _sync_threads() -> set[threading.Thread]:
+    return {t for t in threading.enumerate() if t.name == "eventlog-sync" and t.is_alive()}
+
+
+@pytest.fixture(autouse=True)
+def no_eventlog_sync_thread_left_running() -> Iterator[None]:
+    """Fail a test that leaves an EventLog sync thread running (QC-4 E3).
+
+    A leftover sync thread keeps syncing during later tests (it broke the LOG-23
+    sync-order test once). Only threads the test started count, so one leak fails
+    one test, not every test after it.
+    """
+    before = _sync_threads()
+    yield
+    left = _sync_threads() - before
+    for t in left:
+        t.join(timeout=0.5)  # a thread may be finishing its last wait
+    left = {t for t in left if t.is_alive()}
+    if left:
+        how = "stop the session (stop() and run()) or the EventLog (close() or stop_sync())"
+        pytest.fail(f"{len(left)} EventLog sync thread(s) left running: {how}", pytrace=False)
