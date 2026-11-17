@@ -240,6 +240,7 @@ j1939-logger/
   tools/
     j1939ctl/                laptop command-line tool
     verify_chain.py          standalone chain verifier
+    step2a.py                runs the step 2a Beacon checks from the laptop (DC-29)
     anonymize_capture.py     scrubs VINs and serial numbers from candump files before they go in tests/fixtures/rig/
     findings/                findings-report scoring scripts (separate chat)
     fixtures/                scenario.py: one scenario description → a fixture folder and its findings ground truth (DC-4)
