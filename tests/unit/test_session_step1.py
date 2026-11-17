@@ -15,7 +15,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
@@ -51,25 +51,9 @@ def verify_chain(recs: list[dict[str, Any]], prev: str) -> None:
         prev = r["hash"]
 
 
-class _IdleSocket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
-
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)  # like a real socket timeout, without spinning the CPU
-        raise socket.timeout()
-
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
-
-
 class _NoBusPlatform(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _IdleSocket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
 
 def test_DET_1_settings_and_inventory_come_from_the_config_files() -> None:
@@ -85,7 +69,8 @@ def test_DET_16_new_claim_gives_synced_chained_connection_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fc = FakeClock(start_utc=START, start_mono=100.0)
-    session = Session(_NoBusPlatform(clock=fc, root=tmp_path), settings(), inventory())
+    bus = _NoBusPlatform(clock=fc, root=tmp_path)
+    session = Session(bus, settings(), inventory())
     synced: list[int] = []
     monkeypatch.setattr(os, "fsync", lambda fd: synced.append(fd))
     session.start()
@@ -94,8 +79,8 @@ def test_DET_16_new_claim_gives_synced_chained_connection_start(
         claim = Frame(
             2.0, 160.0, 0x18EEFFF9, True, False, False, SCAN_TOOL.to_bytes(8, "little"), False
         )
-        session.capture._ingest(eec1)
-        session.capture._ingest(claim)
+        bus.feed([eec1])
+        bus.feed([claim])
         fc.advance(60.5)
         assert session.step() == 2
     finally:

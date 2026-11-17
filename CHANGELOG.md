@@ -88,3 +88,7 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - DC-27: `DesktopPlatform(..., feed=True)` and `feed(frames, drops=None)` put frames on an in-memory CAN socket that `capture` reads like SocketCAN (kernel timestamps, the drop count); `sent_frames` records what the logger sends. The public level 2 seam; `platform` contract v3 (test seam only).
 - Review policy: one reviewer, Vaughan Lynn or Elijah Umaru, is enough for any change, including safety-critical paths and DC confirmations (decided 2026-11-17; `docs/reviews.md`). The step 2a run sheet no longer asks for a second observer.
 - Review record: QC-4 (PR #42) approved by Elijah Umaru (2026-11-17); DC-27 confirmed.
+- Tests: every session test now puts frames on the bus through `DesktopPlatform.feed` (DC-27) instead of the private `Capture._ingest` (71 calls in 9 files), so they also exercise `capture`'s socket receive path. The dummy sockets are gone; the transmit tests read what was sent from the platform's `sent_frames`. Two tests now check real values the old stubs hid: the receive buffer read back is `can.rx_buffer_bytes` (LOG-15), and raw capture times are on the logger's wall clock (LOG-10).
+- Desktop platform: a receive fault marks the feed stalled, so `feed()` returns at once instead of waiting while capture is stopped.
+- Review record: PRs #40 and #41 approved by Vaughan Lynn (2026-11-17).
+- DC-28: `bench/checklists.md` now says one observer (Vaughan Lynn or Elijah Umaru) is enough for a checklist item.

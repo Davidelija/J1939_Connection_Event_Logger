@@ -10,13 +10,12 @@ import io
 import json
 import os
 import shutil
-import socket
 import stat
-import time
+import weakref
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import pytest
 
@@ -34,25 +33,18 @@ SCAN = 0x8000810033A1B2C4
 VIN = "1XKYD49X0GJ123456"
 
 
-class _Socket:
-    def setsockopt(self, *a: Any) -> None: ...
-    def getsockopt(self, *a: Any) -> int:
-        return 1 << 20
+# Frames reach the logger through the platform's frame feed (DC-27), not capture's internals.
+_BUS: weakref.WeakKeyDictionary[Session, DesktopPlatform] = weakref.WeakKeyDictionary()
 
-    def settimeout(self, t: float) -> None: ...
-    def recvmsg(self, *a: Any) -> Any:
-        time.sleep(0.005)
-        raise socket.timeout()
 
-    def send(self, data: bytes) -> int:
-        return len(data)
-
-    def close(self) -> None: ...
+def put(s: Session, *frames: Frame, drops: Optional[int] = None) -> None:
+    """Put frames on the bus; returns once capture has taken them in."""
+    _BUS[s].feed(list(frames), drops)
 
 
 class Bus(DesktopPlatform):
-    def open_can(self, listen_only: bool) -> socket.socket:
-        return cast(socket.socket, _Socket())
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(feed=True, **kw)  # frames come through the feed (DC-27)
 
     def bitrate_check(self) -> Optional[int]:
         return 250000
@@ -99,7 +91,7 @@ def run_bus(s: Session, fc: FakeClock, seconds: float, *senders: int) -> None:
     end = fc.mono() + seconds
     while fc.mono() < end:
         for sa in senders:
-            s.capture._ingest(frame((6 << 26) | (65262 << 8) | sa, bytes(8), fc.mono()))
+            put(s, frame((6 << 26) | (65262 << 8) | sa, bytes(8), fc.mono()))
         s.step()
         fc.advance(0.1)
 
@@ -111,11 +103,13 @@ def logger(tmp_path: Path) -> Iterator[tuple[Session, FakeClock, Local]]:
     shutil.copy(EXAMPLES / "cfg-v3.json", root / "card" / "config" / "cfg-v3.json")
     fc = FakeClock(start_utc=START, start_mono=100.0)
     inv = inventory_from_file(json.loads((EXAMPLES / "inv-v2.json").read_text("utf-8")))
-    s = Session(Bus(clock=fc, root=root), settings(), inv, {"config": "cfg-v3"}, None)
+    bus = Bus(clock=fc, root=root)
+    s = Session(bus, settings(), inv, {"config": "cfg-v3"}, None)
+    _BUS[s] = bus
     s.start()
-    s.capture._ingest(claim(ENGINE, 0, fc.mono()))
+    put(s, claim(ENGINE, 0, fc.mono()))
     run_bus(s, fc, 3.0, 0)
-    s.capture._ingest(claim(SCAN, 249, fc.mono()))
+    put(s, claim(SCAN, 249, fc.mono()))
     run_bus(s, fc, 1.0, 0, 249)
     yield s, fc, Local(s, root / "card")
     if s.eventlog is not None:
@@ -267,7 +261,7 @@ def _drive(s: Session, fc: FakeClock, seconds: float, rpm: float) -> None:
     end = fc.mono() + seconds
     raw = int(rpm / 0.125).to_bytes(2, "little")
     while fc.mono() < end:
-        s.capture._ingest(frame((3 << 26) | (61444 << 8), bytes(3) + raw + bytes(3), fc.mono()))
+        put(s, frame((3 << 26) | (61444 << 8), bytes(3) + raw + bytes(3), fc.mono()))
         run_bus(s, fc, 1.0, 0, 249)
 
 
