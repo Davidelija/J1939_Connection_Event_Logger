@@ -79,3 +79,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - `docs/test-writers-brief.md`: a hand-off brief for the test-script writers (levels 2 and 3): what exists, what is missing in order, coverage by case, conventions.
 - User manual: the device library source path is `src/j1939logger/data/device_library.json`, created in step 8; the stale "(step 5)" note is gone.
 - Review record: the build-step rows for steps 1 to 7 and DC-22 recorded as reviewed by Vaughan Lynn and Elijah Umaru (reported 2026-11-16).
+- `docs/step-2a-run-sheet.md`: the Beacon go/no-go checks (X18, X41) as commands, what to record and the pass or fallback for each, with the go/no-go rule and what to update afterwards.
