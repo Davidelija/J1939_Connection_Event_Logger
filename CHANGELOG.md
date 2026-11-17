@@ -86,3 +86,5 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - QC-4 E3: `tests/conftest.py` fails any test that leaves an EventLog sync thread running; the 51 session tests it caught in 7 files now stop their sync threads.
 - Step 2a run sheet: B6 uses a unit that reports ready and then stops pinging the watchdog; A6 and A7 bring `can0` down before changing settings; C3 checks the kernel log for `hctosys` and compares the clocks after a power cycle with no network and NTP off; D2's fallback corrected.
 - DC-27: `DesktopPlatform(..., feed=True)` and `feed(frames, drops=None)` put frames on an in-memory CAN socket that `capture` reads like SocketCAN (kernel timestamps, the drop count); `sent_frames` records what the logger sends. The public level 2 seam; `platform` contract v3 (test seam only).
+- Review policy: one reviewer, Vaughan Lynn or Elijah Umaru, is enough for any change, including safety-critical paths and DC confirmations (decided 2026-11-17; `docs/reviews.md`). The step 2a run sheet no longer asks for a second observer.
+- Review record: QC-4 (PR #42) approved by Elijah Umaru (2026-11-17); DC-27 confirmed.

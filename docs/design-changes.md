@@ -33,7 +33,7 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## DC-27 — A public seam for feeding frames to the logger in level 2 tests  (accepted, 2026-11-17)
 - **Raised by:** Claude Code, branch `qc-fixes-4` (QC-4: the test-writers brief tells level 2 tests to call the private `Capture._ingest`)
-- **Decided by:** Vaughan Lynn, 2026-11-17 (option (a) accepted in the Claude Code session; recorded by Claude Code, to be confirmed in the pull request review)
+- **Decided by:** Vaughan Lynn, 2026-11-17 (option (a) accepted in the Claude Code session; recorded by Claude Code; confirmed by Elijah Umaru, 2026-11-17, in the PR #42 review, as reported by Vaughan Lynn in the session)
 - **The problem:** level 2 (component) tests run `session` in-process and need to put frames on the "bus". Today the developers' session tests call `session.capture._ingest(frame)`, a private method of `capture.py`, and `docs/test-writers-brief.md` points the test-script writers at it. A private name can change without a DC, and it skips `capture`'s socket receive path (kernel timestamps, the SO_RXQ_OVFL drop count, the receive buffer).
 - **Change (option (a), accepted):** `DesktopPlatform` gains a frame feed for tests:
   - `DesktopPlatform(..., feed=True)` makes `open_can()` return an in-memory socket instead of opening `vcan0`;

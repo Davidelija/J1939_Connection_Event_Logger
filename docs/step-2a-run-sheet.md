@@ -6,7 +6,7 @@ For the bench day of build step 2a (decisions X18, X41). It turns the "Beacon go
 
 - **Where:** on the rig, not a truck. Beacon 1 is the unit under test; Beacon 2 (or any SocketCAN node with can-utils) is the second node and traffic source.
 - **Bus:** the rig bus terminated at both ends (120 Ω). The logger adds no termination of its own (HW-2), so the rig must supply it.
-- **People:** one person runs the commands, a second observes (`bench/checklists.md` convention). Both names go on the results.
+- **People:** Vaughan Lynn or Elijah Umaru; one person is enough (2026-11-17). If a second person is there, they observe and their name goes on the results too.
 - **Kit:** a laptop with Ethernet and the USB cable for the Beacon's USB-B port, a bench supply you can switch off, the Beacon's datasheet, a card of the planned type, and a USB stick with the release wheels for the offline install test (B3).
 - **Evidence:** save each command's output as `docs/test-evidence/<ID>_<date>.txt` (for example `PLT-1_2026-11-20.txt`), as `bench/checklists.md` asks.
 - **Shell:** run as root where marked `#`; `can0` stands for whichever interface `ip link show` lists.
