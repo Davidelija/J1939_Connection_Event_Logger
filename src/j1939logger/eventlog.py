@@ -54,6 +54,10 @@ __all__ = [
 ZERO_HASH = "0" * 64
 
 
+# logger_action for an outage that began with a sync failure and lost no record (QC-4 E2)
+SYNC_FAILED = "sync failed; records since the last sync may not be on the card"
+
+
 def format_utc(t: Optional[datetime]) -> Optional[str]:
     """ISO 8601 UTC with milliseconds, for example 2026-11-06T14:02:11.402Z."""
     if t is None:
@@ -186,10 +190,7 @@ class EventLog:
 
     def _append(self, record: Record) -> Optional[str]:
         if record is self._outage:
-            record.fields["logger_action"] = (
-                "record not written" if self._outage_lost <= 1
-                else f"{self._outage_lost} records not written; recording continues"
-            )  # fmt: skip
+            record.fields["logger_action"] = self._outage_action()
         reading = self._clock.now()
         rec = self._rec
         body: dict[str, Any] = {
@@ -256,9 +257,21 @@ class EventLog:
                 self._fd = None
 
     def take_faults(self) -> list[Record]:
-        """Storage-error fault records waiting to be logged or shown (LOG-22)."""
-        out, self._faults = self._faults, []
+        """Storage-error fault records waiting to be logged or shown (LOG-22).
+
+        Takes the lock: the sync thread adds faults too (QC-4 E1).
+        """
+        with self._lock:
+            out, self._faults = self._faults, []
         return out
+
+    def _outage_action(self) -> str:
+        """``logger_action`` for the outage's fault record, from what was lost (rule 14)."""
+        if self._outage_lost == 0:
+            return SYNC_FAILED  # the outage began with a sync failure; no record lost (E2)
+        if self._outage_lost == 1:
+            return "record not written"
+        return f"{self._outage_lost} records not written; recording continues"
 
     def _storage_fault(self, exc: BaseException, record: Optional[Record] = None) -> None:
         kind = exc.kind if isinstance(exc, PlatformError) else type(exc).__name__
@@ -276,7 +289,8 @@ class EventLog:
             sev="high",
             utc=self._clock.to_utc(self._clock.mono()),
             veh_time=None,
-            fields={"cause": f"storage error ({kind})", "logger_action": "record not written"},
+            fields={"cause": f"storage error ({kind})", "logger_action": ""},
         )
         self._outage_lost = 1 if record is not None else 0
+        self._outage.fields["logger_action"] = self._outage_action()
         self._faults.append(self._outage)

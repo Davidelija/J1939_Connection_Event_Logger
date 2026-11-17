@@ -81,3 +81,8 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - Review record: the build-step rows for steps 1 to 7 and DC-22 recorded as reviewed by Vaughan Lynn and Elijah Umaru (reported 2026-11-16).
 - `docs/step-2a-run-sheet.md`: the Beacon go/no-go checks (X18, X41) as commands, what to record and the pass or fallback for each, with the go/no-go rule and what to update afterwards.
 - Test fix: `test_LOG_23_write_atomic_syncs_the_file_and_the_directory` (QC-3 U2) records only its own thread, so a sync thread left running by an earlier test cannot add an fsync to its list (it failed once in CI for that reason).
+- QC-4 E1: `EventLog.take_faults` takes the lock, so a fault raised by the sync thread while the session takes faults is never lost.
+- QC-4 E2: an outage that starts with a sync failure and loses no record is reported as "sync failed; records since the last sync may not be on the card".
+- QC-4 E3: `tests/conftest.py` fails any test that leaves an EventLog sync thread running; the 51 session tests it caught in 7 files now stop their sync threads.
+- Step 2a run sheet: B6 uses a unit that reports ready and then stops pinging the watchdog; A6 and A7 bring `can0` down before changing settings; C3 checks the kernel log for `hctosys` and compares the clocks after a power cycle with no network and NTP off; D2's fallback corrected.
+- Proposed, not yet accepted: DC-new-20261117-frame-seam (a public frame feed on `DesktopPlatform` for level 2 tests).

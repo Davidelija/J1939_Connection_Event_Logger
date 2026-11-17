@@ -118,6 +118,8 @@ def logger(tmp_path: Path) -> Iterator[tuple[Session, FakeClock, Local]]:
     s.capture._ingest(claim(SCAN, 249, fc.mono()))
     run_bus(s, fc, 1.0, 0, 249)
     yield s, fc, Local(s, root / "card")
+    if s.eventlog is not None:
+        s.eventlog.stop_sync()  # no sync thread left running (QC-4 E3)
     for p in tmp_path.rglob("*"):  # let pytest clean up read-only files
         if p.is_file():
             os.chmod(p, stat.S_IWRITE | stat.S_IREAD)

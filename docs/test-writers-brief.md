@@ -14,7 +14,7 @@ Until `tests/component/` exists, **DC-24** counts the developers' in-process ses
 | --- | --- | --- |
 | Fake time | `FakeClock` in `src/j1939logger/platform/desktop.py` | `advance(s)`, `jump(s)`; runs 24 h in one call |
 | Fault injection | `DesktopPlatform(fault_plan=[(at_mono, kind, args)])` | Kinds are the Kind column of `docs/errors.md`; `args` take `for_s` and `ops` (see the module docstring) |
-| The logger in-process | `Session(platform, settings, inventory, versions, startup_faults)`; `start()`, `step()`, `stop()`, `run()` | Feed frames with `session.capture._ingest(frame)`; this is the level 2 entry point |
+| The logger in-process | `Session(platform, settings, inventory, versions, startup_faults)`; `start()`, `step()`, `stop()`, `run()` | The level 2 entry point. A public way to feed it frames is proposed (DC-new-20261117-frame-seam: `DesktopPlatform.feed`); until it is accepted and built, the developers' tests use the private `session.capture._ingest(frame)`, which may change without notice. Stop every session you start (`stop()` then `run()`), or its sync thread fails the test (QC-4 E3) |
 | The logger as a service | `python -m j1939logger.main --root DIR --config FILE --inventory FILE --socket PATH --interface vcan0` | Level 3: a temporary card and flash under `--root` |
 | Commands | the `cmdserver` socket (level 2); `j1939cmd` (level 3); `j1939ctl` with a transport (see `tests/unit/test_j1939ctl.py`'s `Local`) | |
 | Chain check | `tools/verify_chain.py` (`verify([folders], last_hash=...)`, CLI with `--json`) | For `records.py` |

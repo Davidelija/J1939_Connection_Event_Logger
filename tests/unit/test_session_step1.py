@@ -100,6 +100,8 @@ def test_DET_16_new_claim_gives_synced_chained_connection_start(
         assert session.step() == 2
     finally:
         session.capture.stop()
+        if session.eventlog is not None:
+            session.eventlog.stop_sync()  # no sync thread left running (QC-4 E3)
     assert session.eventlog is not None
     all_recs = records(session.eventlog.path)
     assert all_recs[0]["type"] == "session_start"

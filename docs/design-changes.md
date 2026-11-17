@@ -31,6 +31,23 @@ Read this file at the start of every session, after `CLAUDE.md`.
 
 ## Entries
 
+## DC-new-20261117-frame-seam — Question: a public seam for feeding frames to the logger in level 2 tests  (proposed, 2026-11-17)
+- **Raised by:** Claude Code, branch `qc-fixes-4` (QC-4: the test-writers brief tells level 2 tests to call the private `Capture._ingest`)
+- **Decided by:**
+- **The problem:** level 2 (component) tests run `session` in-process and need to put frames on the "bus". Today the developers' session tests call `session.capture._ingest(frame)`, a private method of `capture.py`, and `docs/test-writers-brief.md` points the test-script writers at it. A private name can change without a DC, and it skips `capture`'s socket receive path (kernel timestamps, the SO_RXQ_OVFL drop count, the receive buffer).
+- **Change (option (a), proposed):** `DesktopPlatform` gains a frame feed for tests:
+  - `DesktopPlatform(..., feed=True)` makes `open_can()` return an in-memory socket instead of opening `vcan0`;
+  - `platform.feed(frames, drops=None)` queues `Frame`s on it; `recvmsg` hands them to `capture` one at a time with the ancillary data a real SocketCAN socket gives (`SO_TIMESTAMP` from `Frame.ts_kernel`, `SO_RXQ_OVFL` from `drops`), and times out when the queue is empty;
+  - `send()` on that socket records what the logger transmits (`platform.sent`), as the session tests' `RecordingSocket` does today;
+  - the fault plan's socket faults (`can_down`, `enobufs`) apply to it as to a real socket.
+
+  `capture` and the `Platform` Protocol do not change: the feed exists only on the desktop implementation. The `platform` contract (`docs/modules.md` §4) gains the feed under its test seam, and `docs/test-plan.md` §3 lists it with the other injection points (time, faults, commands).
+- **Option (b), the alternative:** make `Capture._ingest` public as `Capture.ingest(frame, drops=None)`. Smaller, but it changes the contract of `capture.py`, which is safety-critical (DC-25), and level 2 tests would still bypass the socket path.
+- **Why (a):** level 2 is meant to exercise the logger as it runs (test plan §2); feeding through a socket keeps `capture`'s receive path, timestamps and drop counting under test, and keeps the seam inside `platform`, where hardware stand-ins already live (fault plan, `FakeClock`).
+- **Affects:** `platform` (desktop implementation only; the `Platform` Protocol unchanged); `docs/modules.md` §4 (`platform` test seam) and §5; `docs/test-plan.md` §3 (injection points); `docs/test-writers-brief.md` (use the feed, not `_ingest`). No requirement, record or format change. `platform/` is safety-critical (DC-25): the change needs a code-owner review.
+- **Docs updated in the same change (once accepted):** the files above, `CHANGELOG.md`.
+- **Tests (once accepted):** `test_DC_n_feed_delivers_frames_through_capture_with_timestamps`, `test_DC_n_feed_reports_drops_as_kernel_drops`, `test_DC_n_feed_records_what_the_logger_sends`, `test_DC_n_socket_faults_apply_to_the_feed` (n is the number given at acceptance). The developers' session tests may move from `_ingest` to the feed later, file by file; that is not part of this change.
+
 ## DC-26 — At `train start`, ask VIN and identity again, as a bounded exception to NP-14  (accepted, 2026-11-14)
 - **Raised by:** Claude Code, branch `qc-fixes-3` (QC finding R1: NP-12 and NP-13 disagree with NP-14)
 - **Decided by:** Vaughan Lynn, 2026-11-14 (option (a) accepted in the Claude Code session; recorded by Claude Code; confirmed by Vaughan Lynn and Elijah Umaru, 2026-11-14, in the PR #36 review, as reported by Vaughan Lynn in the Claude Code session)
