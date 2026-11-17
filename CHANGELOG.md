@@ -85,4 +85,4 @@ One entry per tagged release (v0.x). Each entry lists what changed, the format v
 - QC-4 E2: an outage that starts with a sync failure and loses no record is reported as "sync failed; records since the last sync may not be on the card".
 - QC-4 E3: `tests/conftest.py` fails any test that leaves an EventLog sync thread running; the 51 session tests it caught in 7 files now stop their sync threads.
 - Step 2a run sheet: B6 uses a unit that reports ready and then stops pinging the watchdog; A6 and A7 bring `can0` down before changing settings; C3 checks the kernel log for `hctosys` and compares the clocks after a power cycle with no network and NTP off; D2's fallback corrected.
-- Proposed, not yet accepted: DC-new-20261117-frame-seam (a public frame feed on `DesktopPlatform` for level 2 tests).
+- DC-27: `DesktopPlatform(..., feed=True)` and `feed(frames, drops=None)` put frames on an in-memory CAN socket that `capture` reads like SocketCAN (kernel timestamps, the drop count); `sent_frames` records what the logger sends. The public level 2 seam; `platform` contract v3 (test seam only).

@@ -129,12 +129,13 @@ platform → capture ──Frame ring──▶ session main loop ──▶ decod
 
 ## 4. Module contracts
 
-### platform  (v2, layer 0) — frozen for step 1
+### platform  (v3, layer 0) — frozen for step 1; v3 (DC-27, desktop test seam only)
 - **Purpose:** the hardware boundary. Desktop (`vcan0`) and Beacon implementations; tests use the desktop one with a fault plan.
 - **Interface:** `open_can(listen_only: bool) -> socket`; `bitrate_check() -> int | None`; `set_light(pattern: str)` ("steady" | "slow" | "fast" | "off"); `now() -> ClockReading`; `rtc_ok() -> bool`; `on_wake() -> (wake_mono, ready_mono)`; `watchdog_kick()`; `paths() -> Paths` (card, flash, keys; `Paths` is defined in `platform/interface.py`, DC-6); `fault(op: str)` (v2, DC-5), called by layer 1 modules just before each operation in `FAULT_OPS` (`can_recv`, `can_send`, `card_write`, `card_sync`, `flash_write`); it raises a planned fault on the desktop and does nothing on hardware.
 - **Time:** `now()` reports `rtc` when the real-time clock is valid, otherwise `elapsed` with no wall time; only `clock` reports `vehicle`, from its own offset (DC-6).
 - **CAN input:** raw SocketCAN by default; `python-can` only as an optional extra inside this layer (X22).
 - **Errors:** raises only `PlatformError` with a `kind` from `docs/errors.md`; a bad argument (an unknown light pattern or operation) is a programming error and raises `ValueError` (DC-6).
+- **Frame feed (DC-27):** `DesktopPlatform(..., feed=True)` makes `open_can()` return an in-memory socket; `feed(frames, drops=None)` delivers `Frame`s to `capture` through `recvmsg` with a kernel timestamp (giving back each frame's `ts_mono`), the SO_RXQ_OVFL count and MSG_CONFIRM for `own`, and returns once `capture` has taken them in; `sent_frames` lists what the logger sends (mono time, CAN ID, data). Socket faults (`can_missing`, `can_down`, `enobufs`) apply as to a real socket. Desktop implementation only.
 - **Test seam:** `DesktopPlatform(fault_plan=[(at_mono, kind, args), ...], clock=FakeClock())` controls time and injects the platform's faults (DC-5): `can_missing`, `no_bitrate`, `rtc_invalid`, `clock_jump`, and through `fault(op)` `can_down`, `enobufs`, `enospc`, `erofs`, `eio`, `card_removed`, `state_unwritable` and `slow_sync`. A fault is active from `at_mono` for `args["for_s"]` seconds, or for the rest of the run. Other kinds are injected by traffic, the harness or test setup (DC-5).
 - **Requirements:** PLT-1 to PLT-8, HW-7, HW-8, STS-1, STS-18. **Not responsible for:** any J1939 logic.
 
